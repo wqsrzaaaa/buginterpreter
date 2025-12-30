@@ -296,10 +296,10 @@ const Chats = ({ setChatId, chatId }) => {
                   className={`relative group px-4 mb-5 py-2 rounded-lg max-w-[70%] w-auto overflow-hidden text-sm ${msg.role === "user" ? "bg-blue-600 text-white" : "bg-hoverbg"}`}
                 >
                   {msg.role === "bot" && isLoading && index === messages.length - 1 ? (
-                    <div className="flex items-center gap-2 text-gray-400">
-                      <span className="w-2 h-2 bg-gray-500 rounded-full animate-bounce delay-150"></span>
-                      <span className="w-2 h-2 bg-gray-500 rounded-full animate-bounce delay-300"></span>
-                      <span className="w-2 h-2 bg-gray-500 rounded-full animate-bounce delay-450"></span>
+                    <div className="flex items-center gap-1 text-gray-400">
+                      <span className="w-1 h-1 bg-gray-500 rounded-full animate-bounce delay-150"></span>
+                      <span className="w-1 h-1 bg-gray-500 rounded-full animate-bounce delay-300"></span>
+                      <span className="w-1 h-1 bg-gray-500 rounded-full animate-bounce delay-450"></span>
                       <span className="text-sm">
                         {showThinking ? "Thinking for better response..." : "Typing..."}
                       </span>

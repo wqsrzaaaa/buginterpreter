@@ -6,41 +6,21 @@ import {
   ChevronRight,
   RotateCcw,
   Bot,
-  User,
   MessageCircleDashed,
 } from "lucide-react";
 import { Theme } from "./Theme";
 import LanguageSelector from "./LanguageSelector";
-import { doc, serverTimestamp, setDoc } from "firebase/firestore";
-import { db } from "@/Firebase";
 
 const dummyChats = [
-  { id: 1, title: "Chat with Alice", lastMessage: "Hey, how are you?" },
-  { id: 2, title: "Project Discussion", lastMessage: "Let's start coding" },
-  { id: 3, title: "Shopping List", lastMessage: "Buy milk and eggs" },
-  { id: 4, title: "Team Meeting", lastMessage: "Meeting at 3 PM" },
-  { id: 5, title: "Random Thoughts", lastMessage: "I love React! gvdfgdfg fdg dfg fdg dfg dfg dfgdfgdf  fdgdf d df gdfgdfg dfg dfgdfgdf ddgd dgdg" },
+  { id: 1, title: "My Old Chats", lastMessage: "Old chats are currently unavailable" },
 ];
 
-export default function CollapsibleRightSidebar({ isOpen, setIsOpen }) {
+export default function CollapsibleRightSidebar({ isOpen, setIsOpen , createChat }) {
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
     setMounted(true);
   }, []);
-
-  const handleNewChat = async () => {
-    await setDoc(doc(db, "chats", newChatId), {
-      messages: [
-        {
-          role: "bot",
-          text: "Hi 👋 I'm Bug Interpreter. Paste your error and I will simplify it for you",
-          createdAt: new Date(),
-        },
-      ],
-      createdAt: serverTimestamp(),
-    });
-  };
 
 
   if (!mounted) return null;
@@ -71,8 +51,8 @@ export default function CollapsibleRightSidebar({ isOpen, setIsOpen }) {
 
       <nav className="flex-1 overflow-y-auto">
         <div
-          onClick={handleNewChat}
-          className="flex items-center gap-2 p-3 cursor-pointer hover:bg-hoverbg"
+        onClick={createChat}
+          className="flex items-center gap-2 p-3 py-4 cursor-pointer hover:bg-hoverbg"
         >
           <Bot size={18} /> New Chat
         </div>

@@ -3,11 +3,12 @@
 import run from '../app/MyApi';
 import { useLanguage } from "./context/LangProvider";
 import React, { useEffect, useRef, useState } from "react";
-import { Send, Bot, User, Copy, Check, Mic, BrainCog, UploadCloud } from "lucide-react";
-import { doc, setDoc, getDoc, updateDoc, arrayUnion, serverTimestamp, Timestamp } from "firebase/firestore";
+import { Send, Bot, Mic, BrainCog, UploadCloud } from "lucide-react";
+import { doc, setDoc, getDoc, serverTimestamp, Timestamp, addDoc, collection } from "firebase/firestore";
 import { db, storage } from "../Firebase";
 import { ref as storageRefFirebase, uploadBytes, getDownloadURL } from "firebase/storage";
 import Image from 'next/image';
+import AiRes from './AiRes';
 
 const formatTime = (date) => {
   return new Date(date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
@@ -17,7 +18,7 @@ const defaultWelcome = [
   { role: "bot", text: "Hi 👋 I'm Bug Interpreter. Paste your error and i will simplify it for you", createdAt: new Date() }
 ];
 
-const Chats = ({ setChatId, chatId }) => {
+const Chats = ({ setChatId, chatId  }) => {
   const [Input, setInput] = useState("");
   const [messages, setMessages] = useState(defaultWelcome);
   const [copiedIndex, setCopiedIndex] = useState(null);
@@ -35,7 +36,6 @@ const Chats = ({ setChatId, chatId }) => {
 
   const { language } = useLanguage();
 
-  // Generate or get chatId from localStorage
   useEffect(() => {
     const existing = localStorage.getItem("chatId");
     if (existing) setChatId(existing);
@@ -92,10 +92,10 @@ const Chats = ({ setChatId, chatId }) => {
   }, [messages]);
 
 
+  
 
   const persistMessages = async (msgs) => {
     if (!chatId) return;
-    console.log(msgs);
     try {
       const chatRef = doc(db, "chats", chatId);
       await setDoc(chatRef, { messages: msgs }, { merge: true });
@@ -177,13 +177,12 @@ const Chats = ({ setChatId, chatId }) => {
   };
 
   const onSent = async (userText) => {
-    if (!userText.trim()) return;
+    if (!userText.trim() && !imageFile) return;
     if (isLoading) return;
 
     setInput("");
     setIsLoading(true);
 
-    // prepare user message (include image if present)
     const userMessage = {
       role: "user",
       text: userText.replace(/\n/g, "<br />"),
@@ -191,35 +190,29 @@ const Chats = ({ setChatId, chatId }) => {
       image: null,
     };
 
-    // if there's an image file, upload it first
     if (imageFile) {
       const url = await uploadImage(imageFile);
       if (url) userMessage.image = url;
-      // clear local image state
-      setImageFile(null);
-      setImagePreview(null);
     }
 
-    // Add user message locally and persist
-    let interimMessages = (msgs) => [...msgs, userMessage, { role: "bot", text: "", createdAt: new Date() }];
     setMessages(prev => {
-      const newMsgs = interimMessages(prev);
+      const newMsgs = [...prev, userMessage, { role: "bot", text: "", createdAt: new Date() }];
       persistMessages(newMsgs);
       return newMsgs;
     });
 
-    // index of bot message
-    let botIndex; // will compute from latest state after setting
-    // Call AI
+    let aiInput = userText;
+    if (userMessage.image) {
+      aiInput += `\n[Analyze this image: ${userMessage.image}]`;
+    }
+
     let response = "";
     try {
-      response = await run(userText, language.label);
+      response = await run(aiInput, language.label, userMessage.image || null,); // run should handle text + image
     } catch (e) {
       response = "Sorry, I couldn't get a response right now.";
       console.error(e);
     }
-
-    // format response
     let ResultArray = response.split("**");
     let newResponse = "";
     for (let i = 0; i < ResultArray.length; i++) {
@@ -232,11 +225,12 @@ const Chats = ({ setChatId, chatId }) => {
     }
     let cleanResponse = removeDuplicates(NewResp2);
     let words = cleanResponse.split(" ");
+
     let i = 0;
     const interval = setInterval(() => {
       setMessages(prev => {
         const updated = [...prev];
-        botIndex = updated.length - 1;
+        const botIndex = updated.length - 1;
         updated[botIndex] = { ...updated[botIndex], text: (updated[botIndex].text || "") + words[i] + " " };
         return updated;
       });
@@ -245,14 +239,16 @@ const Chats = ({ setChatId, chatId }) => {
       if (i >= words.length) {
         clearInterval(interval);
         setIsLoading(false);
-        // persist final messages after streaming completes
         setMessages(prev => {
           persistMessages(prev);
           return prev;
         });
+        setImageFile(null);
+        setImagePreview(null);
       }
     }, 40);
   };
+
 
   const handleSend = () => onSent(Input);
 
@@ -266,7 +262,7 @@ const Chats = ({ setChatId, chatId }) => {
         setShowThinking(true);
       }, 6000);
     } else {
-      setShowThinking(false); 
+      setShowThinking(false);
     }
 
     return () => clearTimeout(timer);
@@ -277,119 +273,39 @@ const Chats = ({ setChatId, chatId }) => {
 
   return (
     <div className="flex flex-col h-screen relative overflow-hidden bg-background">
-      {/* Header */}
       <div className="p-4 border-b border-border relative flex items-center gap-2 z-3 bg-background font-semibold">
         <BrainCog /> Bug Interpreter
       </div>
 
-      <div ref={messagesContainerRef} className="flex-1 p-4 space-y-4 overflow-y-auto custom-scrollbar">
-        {messages.length > 0 ? (
-          <div className="flex-1 p-4 space-y-4 overflow-y-auto custom-scrollbar">
-            {messages.map((msg, index) => (
-              <div
-                key={index}
-                className={`flex gap-2 ${msg.role === "user" ? "justify-end" : "justify-start"}`}
-              >
-                {msg.role === "bot" && <Bot size={20} />}
-
-                <div
-                  className={`relative group px-4 mb-5 py-2 rounded-lg max-w-[70%] w-auto overflow-hidden text-sm ${msg.role === "user" ? "bg-blue-600 text-white" : "bg-hoverbg"}`}
-                >
-                  {msg.role === "bot" && isLoading && index === messages.length - 1 ? (
-                    <div className="flex items-center gap-1 text-gray-400">
-                      <span className="w-1 h-1 bg-gray-500 rounded-full animate-bounce delay-150"></span>
-                      <span className="w-1 h-1 bg-gray-500 rounded-full animate-bounce delay-300"></span>
-                      <span className="w-1 h-1 bg-gray-500 rounded-full animate-bounce delay-450"></span>
-                      <span className="text-sm">
-                        {showThinking ? "Thinking for better response..." : "Typing..."}
-                      </span>
-                    </div>
-                  ) : (
-                    <div
-                      className={`flex flex-col gap-2  px-2 rounded-lg text-sm
-                          ${msg.role === "user"
-                          ? "bg-blue-600 text-white ml-auto"
-                          : "bg-hoverbg text-foreground"
-                        }`}
-                    >
-                      {msg.image && (
-                        <img
-                          src={msg.image}
-                          onClick={()=> (setzoom(true) , setImageZoom(msg.image))}
-                          alt="chat image"
-                          className="w-55 rounded-lg object-cover"
-                        />
-                      )}
-
-                      {msg.text && (
-                        <p className="whitespace-pre-wrap wrap-break-words">
-                          {msg.text}
-                        </p>
-                      )}
-                    </div>
-
-                  )}
-
-
-                  {mounted && msg.createdAt && (
-                    <div className="text-xs text-gray-500 mt-1">
-                      {formatTime(
-                        msg.createdAt instanceof Timestamp
-                          ? msg.createdAt.toDate()
-                          : new Date(msg.createdAt)
-                      )}
-                    </div>
-                  )}
-
-                  {msg.role === "bot" && mounted && (
-                    <button
-                      onClick={() => handleCopy(msg.text, index)}
-                      className="absolute -bottom-8 right-2 cursor-pointer opacity-100 transition-opacity p-2 rounded-md hover:bg-hoverbg"
-                    >
-                      {copiedIndex === index ? (
-                        <Check size={14} className="text-primary" />
-                      ) : (
-                        <Copy size={14} className="text-muted-foreground" />
-                      )}
-                    </button>
-                  )}
-                </div>
-
-                {msg.role === "user" && <User size={20} />}
-              </div>
-            ))}
-
-
-          </div>
-        ) : (
-          <div className="flex-1 p-4 space-y-4 items-center justify-center ">
-            <div className="flex items-center justify-center flex-col gap-2">
-              <h1 className="text-3xl font-bold flex items-center gap-2">
-                Hello <span className="animate-wave inline-block">👋</span>
-              </h1>
-              <p className="text-center text-gray-500">This is Bug Interpreter. Paste your error and learn fast with AI</p>
-            </div>
-          </div>
-        )}
-
-      </div>
-
+      <AiRes
+        messagesContainerRef={messagesContainerRef}
+        messages={messages}
+        isLoading={isLoading}
+        showThinking={showThinking}
+        setzoom={setzoom}
+        setImageZoom={setImageZoom}
+        mounted={mounted}
+        formatTime={formatTime}
+        handleCopy={handleCopy}
+        copiedIndex={copiedIndex}
+        Bot={Bot}
+      />
       {/* Input */}
       <div className="p-3 flex flex-wrap items-end bg-transparent ">
         {imagePreview && (
           <div className='w-full h-25 flex items-end gap-6 pb-2'>
             <img src={imagePreview}
-            onClick={()=>( setzoom(true) , setImageZoom(imagePreview))}
-            alt="uploaded" className="w-24 h-24 object-cover cursor-pointer rounded-md" />
+              onClick={() => (setzoom(true), setImageZoom(imagePreview))}
+              alt="uploaded" className="w-24 h-24 object-cover cursor-pointer rounded-md" />
           </div>
         )}
 
         {ImageZoom && (
-          <div onClick={()=> setImageZoom(null)} className='w-full h-screen flex items-center z-99 justify-center fixed top-0 left-0'>
-          <div className='w-full h-screen bg-black/40 absolute top-0 left-0'>
+          <div onClick={() => setImageZoom(null)} className='w-full h-screen flex items-center z-99 justify-center fixed top-0 left-0'>
+            <div className='w-full h-screen bg-black/40 absolute top-0 left-0'>
+            </div>
+            <Image src={ImageZoom} alt='image' width={600} height={600} />
           </div>
-          <Image src={ImageZoom} alt='image' width={600} height={600} />
-        </div>
         )}
 
         <textarea
@@ -398,7 +314,7 @@ const Chats = ({ setChatId, chatId }) => {
           onChange={(e) => setInput(e.target.value)}
           onInput={(e) => {
             const el = e.currentTarget;
-            el.style.height = "auto"; // reset height
+            el.style.height = "auto";
             el.style.height = `${Math.min(el.scrollHeight, 180)}px`;
           }}
           onKeyDown={(e) => {
@@ -409,7 +325,7 @@ const Chats = ({ setChatId, chatId }) => {
             }
           }}
           placeholder="Type anything..."
-          className="flex-1 px-3 py-2 min-h-12 relative z-6 mr-2 pr-19 custom-scrollbar resize-none border border-hardborder rounded-xl bg-transparent placeholder:text-muted-foreground focus:border-primary focus:ring-1 focus:ring-ring"
+          className="flex-1 px-3 py-2 min-h-12 relative z-6 mr-2 pr-25 custom-scrollbar resize-none border border-hardborder rounded-xl bg-transparent placeholder:text-muted-foreground focus:border-primary focus:ring-1 focus:ring-ring"
         />
 
         <div className="relative z-12">

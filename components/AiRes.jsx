@@ -39,7 +39,7 @@ const AiRes = ({messagesContainerRef , messages , isLoading , showThinking , set
                       )}
 
                       {msg.text && (
-                        <p className="whitespace-pre-wrap wrap-break-words">
+                        <p className="whitespace-pre-wrap w-full break-words">
                           {msg.text}
                         </p>
                       )}
@@ -49,7 +49,7 @@ const AiRes = ({messagesContainerRef , messages , isLoading , showThinking , set
 
 
                   {mounted && msg.createdAt && (
-                    <div className="text-xs text-gray-500 mt-1">
+                    <div className="text-xs text-gray-400 mt-1">
                       {formatTime(
                         msg.createdAt instanceof Timestamp
                           ? msg.createdAt.toDate()

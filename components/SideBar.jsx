@@ -15,12 +15,20 @@ const dummyChats = [
   { id: 1, title: "My Old Chats", lastMessage: "Old chats are currently unavailable" },
 ];
 
-export default function CollapsibleRightSidebar({ isOpen, setIsOpen , createChat }) {
+export default function CollapsibleRightSidebar({ isOpen, setIsOpen, setreloadScale , createChat, currentChatId }) {
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
     setMounted(true);
   }, []);
+
+  useEffect(() => {
+    if (currentChatId) {
+      localStorage.setItem("chatId", currentChatId);
+      window.location.reload()
+    }
+  }, [currentChatId]);
+
 
 
   if (!mounted) return null;
@@ -51,7 +59,7 @@ export default function CollapsibleRightSidebar({ isOpen, setIsOpen , createChat
 
       <nav className="flex-1 overflow-y-auto">
         <div
-        onClick={createChat}
+          onClick={()=> (createChat() , setreloadScale(true))}
           className="flex items-center gap-2 p-3 py-4 cursor-pointer hover:bg-hoverbg"
         >
           <Bot size={18} /> New Chat

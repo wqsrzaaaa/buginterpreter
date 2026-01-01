@@ -28,6 +28,8 @@ const [currentChatId, setCurrentChatId] = useState(null);
       return docRef.id;
     };
 
+    const [reloadScale, setreloadScale] = useState(false)
+
   return (
     <div className="relative overflow-hidden">
       <main
@@ -36,12 +38,15 @@ const [currentChatId, setCurrentChatId] = useState(null);
         }`}
       >
         <Chats currentChatId={currentChatId} chatId={chatId} setChatId={setChatId} />
+        <div className={`w-full h-screen fixed top-0 left-0 z-99 bg-black/60 ${reloadScale ? "scale-100" : "scale-0"}`}></div>
       </main>
 
       <CollapsibleRightSidebar
         isOpen={isSidebarOpen}
         setIsOpen={setIsSidebarOpen}
         createChat={createChat}
+        currentChatId={currentChatId}
+        setreloadScale={setreloadScale}
       />
     </div>
   );

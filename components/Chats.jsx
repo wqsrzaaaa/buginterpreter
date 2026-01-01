@@ -4,7 +4,7 @@ import run from '../app/MyApi';
 import { useLanguage } from "./context/LangProvider";
 import React, { useEffect, useRef, useState } from "react";
 import { Send, Bot, Mic, BrainCog, UploadCloud } from "lucide-react";
-import { doc, setDoc, getDoc, serverTimestamp, Timestamp, addDoc, collection } from "firebase/firestore";
+import { doc, setDoc, getDoc, serverTimestamp, Timestamp, addDoc, collection, onSnapshot } from "firebase/firestore";
 import { db, storage } from "../Firebase";
 import { ref as storageRefFirebase, uploadBytes, getDownloadURL } from "firebase/storage";
 import Image from 'next/image';
@@ -18,7 +18,7 @@ const defaultWelcome = [
   { role: "bot", text: "Hi 👋 I'm Bug Interpreter. Paste your error and i will simplify it for you", createdAt: new Date() }
 ];
 
-const Chats = ({ setChatId, chatId  }) => {
+const Chats = ({ setChatId, chatId }) => {
   const [Input, setInput] = useState("");
   const [messages, setMessages] = useState(defaultWelcome);
   const [copiedIndex, setCopiedIndex] = useState(null);
@@ -35,16 +35,6 @@ const Chats = ({ setChatId, chatId  }) => {
   const messagesContainerRef = useRef(null);
 
   const { language } = useLanguage();
-
-  useEffect(() => {
-    const existing = localStorage.getItem("chatId");
-    if (existing) setChatId(existing);
-    else {
-      const id = (typeof crypto !== "undefined" && crypto.randomUUID) ? crypto.randomUUID() : `chat_${Date.now()}`;
-      localStorage.setItem("chatId", id);
-      setChatId(id);
-    }
-  }, []);
 
   useEffect(() => {
     const existing = localStorage.getItem("chatId");
@@ -92,7 +82,7 @@ const Chats = ({ setChatId, chatId  }) => {
   }, [messages]);
 
 
-  
+
 
   const persistMessages = async (msgs) => {
     if (!chatId) return;
@@ -249,6 +239,29 @@ const Chats = ({ setChatId, chatId  }) => {
     }, 40);
   };
 
+ useEffect(() => {
+  if (!chatId) {
+    setMessages(defaultWelcome);
+    return;
+  }
+
+  const chatRef = doc(db, "chats", chatId);
+
+  const unsub = onSnapshot(chatRef, async (snap) => {
+    if (snap.exists()) {
+      setMessages(snap.data().messages || defaultWelcome);
+    } else {
+      // initialize new chat
+      await setDoc(chatRef, {
+        messages: defaultWelcome,
+        createdAt: serverTimestamp(),
+      });
+      setMessages(defaultWelcome);
+    }
+  });
+
+  return () => unsub();
+}, [chatId]);
 
   const handleSend = () => onSent(Input);
 
@@ -257,7 +270,6 @@ const Chats = ({ setChatId, chatId  }) => {
   useEffect(() => {
     let timer;
     if (isLoading) {
-      // Start a 6-second timer
       timer = setTimeout(() => {
         setShowThinking(true);
       }, 6000);

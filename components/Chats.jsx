@@ -191,9 +191,11 @@ const onSent = async (userText) => {
     return newMsgs;
   });
 
+  const url = await uploadImage(imageFile); 
+
   let response = "";
   try {
-    response = await run(aiInput, language.label, imageFile || null);
+    response = await run(aiInput, language.label, url );
   } catch (e) {
     response = "Sorry, I couldn't get a response right now.";
     console.error(e);

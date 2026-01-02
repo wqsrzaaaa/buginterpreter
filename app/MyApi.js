@@ -41,9 +41,13 @@ Explain everything in very simple and in ${languageLabel} language
 
   if (imageUrl) {
     parts.push({
-      image: { type: "url", imageUrl: imageUrl },
+      fileData: {
+        mimeType: "image/png", 
+        fileUri: imageUrl,
+      },
     });
   }
+
 
   const chatSession = model.startChat({
     generationConfig,

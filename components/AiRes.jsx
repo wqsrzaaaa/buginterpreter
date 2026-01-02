@@ -5,7 +5,11 @@ import { Check, Copy, User } from 'lucide-react'
 
 const AiRes = ({messagesContainerRef , messages , isLoading , showThinking , setzoom , setImageZoom ,
    mounted , formatTime , handleCopy , copiedIndex , Bot}) => {
-  return (
+  
+  
+    
+  
+    return (
      <div ref={messagesContainerRef} className="flex-1 p-4 space-y-4 overflow-y-auto custom-scrollbar">
         {messages.length > 1 ? (
           <div className="flex-1 p-4 space-y-4 overflow-y-auto custom-scrollbar">
@@ -34,7 +38,7 @@ const AiRes = ({messagesContainerRef , messages , isLoading , showThinking , set
                           src={msg.image}
                           onClick={()=> (setzoom(true) , setImageZoom(msg.image))}
                           alt="chat image"
-                          className="w-55 rounded-lg object-cover"
+                          className="w-25 rounded-lg object-cover"
                         />
                       )}
 

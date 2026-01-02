@@ -82,8 +82,6 @@ const Chats = ({ setChatId, chatId }) => {
   }, [messages]);
 
 
-
-
   const persistMessages = async (msgs) => {
     if (!chatId) return;
     try {
@@ -166,78 +164,90 @@ const Chats = ({ setChatId, chatId }) => {
     }
   };
 
-  const onSent = async (userText) => {
-    if (!userText.trim() && !imageFile) return;
-    if (isLoading) return;
+const onSent = async (userText) => {
+  if (!userText.trim() && !imageFile) return;
+  if (isLoading) return;
 
-    setInput("");
-    setIsLoading(true);
+  setInput("");
+  setIsLoading(true);
+  setImagePreview(null)
 
-    const userMessage = {
-      role: "user",
-      text: userText.replace(/\n/g, "<br />"),
-      createdAt: new Date(),
-      image: null,
-    };
+  const userMessage = {
+    role: "user",
+    text: userText.replace(/\n/g, "<br />"),
+    createdAt: new Date(),
+    image: imagePreview,
+  };
 
-    if (imageFile) {
+  let aiInput = userText;
+  if (imageFile) {
+    const tempUrl = URL.createObjectURL(imageFile);
+    aiInput += `\n[Analyze this image: ${tempUrl}]`;
+  }
+
+  setMessages(prev => {
+    const newMsgs = [...prev, userMessage, { role: "bot", text: "", createdAt: new Date() }];
+    persistMessages(newMsgs);
+    return newMsgs;
+  });
+
+  let response = "";
+  try {
+    response = await run(aiInput, language.label, imageFile || null);
+  } catch (e) {
+    response = "Sorry, I couldn't get a response right now.";
+    console.error(e);
+  }
+
+  if (imageFile) {
+    try {
       const url = await uploadImage(imageFile);
       if (url) userMessage.image = url;
+    } catch (e) {
+      console.error("Image upload failed after AI:", e);
     }
+  }
 
+  let ResultArray = response.split("**");
+  let newResponse = "";
+  for (let i = 0; i < ResultArray.length; i++) {
+    if (i === 0 || i % 2 !== 1) newResponse += ResultArray[i];
+    else newResponse += "<b>" + ResultArray[i] + "</b>";
+  }
+  let NewResp2 = newResponse.split("*").join("</br>");
+  function removeDuplicates(str) {
+    return str.split(" ").filter((word, i, arr) => word !== arr[i - 1]).join(" ");
+  }
+  let cleanResponse = removeDuplicates(NewResp2);
+  let words = cleanResponse.split(" ");
+
+  let i = 0;
+  const interval = setInterval(() => {
     setMessages(prev => {
-      const newMsgs = [...prev, userMessage, { role: "bot", text: "", createdAt: new Date() }];
-      persistMessages(newMsgs);
-      return newMsgs;
+      const updated = [...prev];
+      const botIndex = updated.length - 1;
+      updated[botIndex] = { ...updated[botIndex], text: (updated[botIndex].text || "") + words[i] + " " };
+      return updated;
     });
 
-    let aiInput = userText;
-    if (userMessage.image) {
-      aiInput += `\n[Analyze this image: ${userMessage.image}]`;
-    }
+    i++;
+    if (i >= words.length) {
+      clearInterval(interval);
+      setIsLoading(false);
 
-    let response = "";
-    try {
-      response = await run(aiInput, language.label, userMessage.image || null,); // run should handle text + image
-    } catch (e) {
-      response = "Sorry, I couldn't get a response right now.";
-      console.error(e);
-    }
-    let ResultArray = response.split("**");
-    let newResponse = "";
-    for (let i = 0; i < ResultArray.length; i++) {
-      if (i === 0 || i % 2 !== 1) newResponse += ResultArray[i];
-      else newResponse += "<b>" + ResultArray[i] + "</b>";
-    }
-    let NewResp2 = newResponse.split("*").join("</br>");
-    function removeDuplicates(str) {
-      return str.split(" ").filter((word, i, arr) => word !== arr[i - 1]).join(" ");
-    }
-    let cleanResponse = removeDuplicates(NewResp2);
-    let words = cleanResponse.split(" ");
-
-    let i = 0;
-    const interval = setInterval(() => {
       setMessages(prev => {
         const updated = [...prev];
-        const botIndex = updated.length - 1;
-        updated[botIndex] = { ...updated[botIndex], text: (updated[botIndex].text || "") + words[i] + " " };
+        const userIndex = updated.findIndex(m => m === userMessage);
+        if (userIndex !== -1) updated[userIndex] = userMessage;
+        persistMessages(updated);
         return updated;
       });
 
-      i++;
-      if (i >= words.length) {
-        clearInterval(interval);
-        setIsLoading(false);
-        setMessages(prev => {
-          persistMessages(prev);
-          return prev;
-        });
-        setImageFile(null);
-        setImagePreview(null);
-      }
-    }, 40);
-  };
+      setImageFile(null);
+      setImagePreview(null);
+    }
+  }, 40);
+};
 
  useEffect(() => {
   if (!chatId) {
@@ -301,6 +311,7 @@ const Chats = ({ setChatId, chatId }) => {
         handleCopy={handleCopy}
         copiedIndex={copiedIndex}
         Bot={Bot}
+        imagePreview={imagePreview}
       />
       {/* Input */}
       <div className="p-3 flex flex-wrap items-end bg-transparent ">

@@ -200,6 +200,7 @@ const onSent = async (userText) => {
     response = "Sorry, I couldn't get a response right now.";
     console.error(e);
   }
+  //h
 
   if (imageFile) {
     try {

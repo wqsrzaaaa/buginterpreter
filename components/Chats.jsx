@@ -164,26 +164,25 @@ const Chats = ({ setChatId, chatId }) => {
     }
   };
 
+
+  console.log(imagePreview);
+  
+
+  const tempImageBase64 = ""
+
 const onSent = async (userText) => {
   if (!userText.trim() && !imageFile) return;
   if (isLoading) return;
 
   setInput("");
   setIsLoading(true);
-  setImagePreview(null)
 
   const userMessage = {
     role: "user",
     text: userText.replace(/\n/g, "<br />"),
     createdAt: new Date(),
-    image: imagePreview,
+    image: imagePreview, 
   };
-
-  let aiInput = userText;
-  if (imageFile) {
-    const tempUrl = URL.createObjectURL(imageFile);
-    aiInput += `\n[Analyze this image: ${tempUrl}]`;
-  }
 
   setMessages(prev => {
     const newMsgs = [...prev, userMessage, { role: "bot", text: "", createdAt: new Date() }];
@@ -191,16 +190,18 @@ const onSent = async (userText) => {
     return newMsgs;
   });
 
-  const url = await uploadImage(imageFile); 
-
   let response = "";
+
   try {
-    response = await run(aiInput, language.label, url );
+    response = await run(
+      userText,
+      language.label,
+      imagePreview 
+    );
   } catch (e) {
     response = "Sorry, I couldn't get a response right now.";
     console.error(e);
   }
-  //h
 
   if (imageFile) {
     try {
@@ -217,10 +218,14 @@ const onSent = async (userText) => {
     if (i === 0 || i % 2 !== 1) newResponse += ResultArray[i];
     else newResponse += "<b>" + ResultArray[i] + "</b>";
   }
+
   let NewResp2 = newResponse.split("*").join("</br>");
+
   function removeDuplicates(str) {
-    return str.split(" ").filter((word, i, arr) => word !== arr[i - 1]).join(" ");
-  }
+  return str.split(" ").filter((word, i, arr) => word !== arr[i - 1]).join(" ");
+}
+
+
   let cleanResponse = removeDuplicates(NewResp2);
   let words = cleanResponse.split(" ");
 
@@ -229,7 +234,10 @@ const onSent = async (userText) => {
     setMessages(prev => {
       const updated = [...prev];
       const botIndex = updated.length - 1;
-      updated[botIndex] = { ...updated[botIndex], text: (updated[botIndex].text || "") + words[i] + " " };
+      updated[botIndex] = {
+        ...updated[botIndex],
+        text: (updated[botIndex].text || "") + words[i] + " ",
+      };
       return updated;
     });
 
@@ -251,6 +259,7 @@ const onSent = async (userText) => {
     }
   }, 40);
 };
+
 
  useEffect(() => {
   if (!chatId) {

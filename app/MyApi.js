@@ -1,10 +1,10 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
 
-const apiKey = process.env.GOOGLE_GENERATIVE_AI_API_KEY;
+const apiKey = process.env.NEXT_PUBLIC_GOOGLE_GENERATIVE_AI_API_KEY;
 const genAI = new GoogleGenerativeAI(apiKey);
 
 const model = genAI.getGenerativeModel({
-  model: "gemini-2.5-flash-lite",
+  model: "gemini-2.5-flash",
 });
 
 const generationConfig = {
@@ -15,7 +15,12 @@ const generationConfig = {
   responseMimeType: "text/plain",
 };
 
-export async function run(userError, languageLabel = "English", imageUrl = null) {
+
+export async function run(
+  userError,
+  languageLabel = "English",
+  imageBase64 = null
+) {
   const SYSTEM_PROMPT = `
 You are Bug Interpreter, a professional debugging assistant.
 
@@ -34,33 +39,31 @@ RESPONSE FORMAT:
 Explain everything in very simple and in ${languageLabel} language
 `;
 
-  const parts = [
+  const model = genAI.getGenerativeModel({
+    model: "gemini-1.5-flash", 
+  });
+
+  const messageParts = [
     { text: SYSTEM_PROMPT },
     { text: userError },
   ];
 
-  if (imageUrl) {
-    parts.push({
-      fileData: {
-        mimeType: "image/png", 
-        fileUri: imageUrl,
+  if (imageBase64) {
+    const base64Data = imageBase64.split(",")[1];
+    messageParts.push({
+      inlineData: {
+        mimeType: "image/png",
+        data: base64Data,
       },
     });
   }
 
+  // 3. Send the parts directly in sendMessage
+  // We don't need history if we are sending everything in one go
+  const result = await model.generateContent(messageParts);
 
-  const chatSession = model.startChat({
-    generationConfig,
-    history: [
-      {
-        role: "user",
-        parts: parts,
-      },
-    ],
-  });
-
-  const result = await chatSession.sendMessage("");
   return result.response.text();
 }
+
 
 export default run;

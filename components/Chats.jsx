@@ -337,7 +337,6 @@ const Chats = ({ setChatId, chatId }) => {
         copiedIndex={copiedIndex}
         Bot={Bot}
       />
-      {/* Input */}
       <div className="p-3 flex flex-wrap items-end bg-transparent ">
         <textarea
           ref={textareaRef}

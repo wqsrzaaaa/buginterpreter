@@ -9,6 +9,8 @@ import { db, storage } from "../Firebase";
 import { ref as storageRefFirebase, uploadBytes, getDownloadURL } from "firebase/storage";
 import Image from 'next/image';
 import AiRes from './AiRes';
+import formatAIResponse from '@/components/FormatAirespo'
+import VoiceInput, { handleMic } from './Handlemic';
 
 const formatTime = (date) => {
   return new Date(date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
@@ -17,6 +19,8 @@ const formatTime = (date) => {
 const defaultWelcome = [
   { role: "bot", text: "Hi 👋 I'm Bug Interpreter. Paste your error and i will simplify it for you", createdAt: new Date() }
 ];
+
+
 
 
 const Chats = ({ setChatId, chatId }) => {
@@ -32,7 +36,8 @@ const Chats = ({ setChatId, chatId }) => {
   const [imageFile, setImageFile] = useState(null);
   const [uploadProgress, setUploadProgress] = useState(0);
 
-  const recognitionRef = useRef(null);
+
+  const recognitionRef = useRef()
   const textareaRef = useRef(null);
   const messagesContainerRef = useRef(null);
 
@@ -90,73 +95,23 @@ const Chats = ({ setChatId, chatId }) => {
     }
   };
 
-  const handleMic = () => {
-    if (!("webkitSpeechRecognition" in window || "SpeechRecognition" in window)) {
-      alert("Speech recognition not supported in this browser");
-      return;
-    }
-
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-
-    if (!recognitionRef.current) {
-      recognitionRef.current = new SpeechRecognition();
-      recognitionRef.current.continuous = true;
-      recognitionRef.current.interimResults = true;
-
-      let finalTranscript = "";
-
-      recognitionRef.current.onresult = (event) => {
-        let interimTranscript = "";
-        for (let i = event.resultIndex; i < event.results.length; i++) {
-          const transcript = event.results[i][0].transcript;
-          if (event.results[i].isFinal) {
-            finalTranscript += (finalTranscript ? " " : "") + transcript;
-            setInput(finalTranscript);
-          } else {
-            interimTranscript += transcript;
-            setInput(finalTranscript + (interimTranscript ? " " + interimTranscript : ""));
-          }
-        }
-      };
-
-      recognitionRef.current.onend = () => setRecording(false);
-    }
-
-    recognitionRef.current.lang = language.code;
-
-    if (recording) {
-      recognitionRef.current.stop();
-      setRecording(false);
-    } else {
-      recognitionRef.current.start();
-      setRecording(true);
-    }
-  };
-
-  const handleUpload = (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-    setImageFile(file);
-    const reader = new FileReader();
-    reader.onload = () => setImagePreview(reader.result);
-    reader.readAsDataURL(file);
-  };
+ 
 
 
 
   const uploadImageToFirebase = async (file) => {
-  if (!file || !chatId) return null;
+    if (!file || !chatId) return null;
 
-  const imageRef = storageRefFirebase(
-    storage,
-    `chat-images/${chatId}/${Date.now()}-${file.name}`
-  );
+    const imageRef = storageRefFirebase(
+      storage,
+      `chat-images/${chatId}/${Date.now()}-${file.name}`
+    );
 
-  await uploadBytes(imageRef, file);
+    await uploadBytes(imageRef, file);
 
-  const httpsUrl = await getDownloadURL(imageRef);
-  return httpsUrl; // ✅ ONLY HTTPS URL
-};
+    const httpsUrl = await getDownloadURL(imageRef);
+    return httpsUrl; // ✅ ONLY HTTPS URL
+  };
 
 
 
@@ -166,6 +121,21 @@ const Chats = ({ setChatId, chatId }) => {
     setCopiedIndex(index);
     setTimeout(() => setCopiedIndex(null), 1500);
   };
+
+
+  const escapeHtml = (unsafe) => {
+    if (!unsafe && unsafe !== "") return "";
+    return String(unsafe)
+      .replaceAll("&", "&amp;")
+      .replaceAll("<", "&lt;")
+      .replaceAll(">", "&gt;")
+      .replaceAll('"', "&quot;")
+      .replaceAll("'", "&#039;");
+  };
+
+  function removeDuplicateWords(str) {
+    return str.split(" ").filter((word, i, arr) => word !== arr[i - 1]).join(" ");
+  }
 
   const onSent = async (userText) => {
     if (!userText.trim() && !imageFile) return;
@@ -178,17 +148,13 @@ const Chats = ({ setChatId, chatId }) => {
     if (imageFile) {
       try {
         imageUrl = await uploadImageToFirebase(imageFile);
-        if (!imageUrl) {
-          // fallback to preview if upload failed
-          imageUrl = imagePreview;
-        }
+        if (!imageUrl) imageUrl = imagePreview;
       } catch (e) {
         console.error("Upload error, using preview instead:", e);
         imageUrl = imagePreview;
       }
     }
 
-    // 2) Create the user message using the firebase link (if available)
     const userMessage = {
       role: "user",
       text: userText.replace(/\n/g, "<br />"),
@@ -196,77 +162,65 @@ const Chats = ({ setChatId, chatId }) => {
       image: imageUrl || null,
     };
 
-    // Add user message and bot placeholder to UI immediately
     setMessages(prev => {
       const newMsgs = [
         ...prev,
         userMessage,
-        { role: "bot", text: "", createdAt: new Date() }
+        { role: "bot", text: "", createdAt: new Date() } 
       ];
       persistMessages(newMsgs);
       return newMsgs;
     });
-
-    // 3) Send to Gemini API (run) with the image URL (or null)
-    let response = "";
+    let aiText = "Sorry, I couldn't get a response right now.";
     try {
-      response = await run(
-        userText,
-        language.label,
-        imageUrl // pass URL (firebase link) to your API
-      );
+      const aiResult = await run(userText, language.label, imageUrl);
+
+      if (!aiResult || !aiResult.ok) {
+        aiText = "⚠️ Failed to analyze the error.";
+      } else {
+        const raw = formatAIResponse(aiResult.data || {});
+        const escaped = escapeHtml(raw);
+        aiText = escaped.replace(/\n/g, "<br />");
+      }
     } catch (e) {
-      console.error(e);
-      response = "Sorry, I couldn't get a response right now.";
+      console.error("AI call error:", e);
+      aiText = "Sorry, I couldn't get a response right now.";
     }
 
-    // 4) Format AI response the same way you had it
-    let ResultArray = response.split("**");
-    let newResponse = "";
-    for (let i = 0; i < ResultArray.length; i++) {
-      if (i === 0 || i % 2 !== 1) newResponse += ResultArray[i];
-      else newResponse += "<b>" + ResultArray[i] + "</b>";
-    }
+    let cleanResponse = removeDuplicateWords(aiText);
+    cleanResponse = cleanResponse
+      .replace(/\*\*(.+?)\*\*/g, "<b>$1</b>")
+      .replace(/\*(.+?)\*/g, "<i>$1</i>");
 
-    
+    const words = cleanResponse.split(" ");
+    let idx = 0;
 
-    let NewResp2 = newResponse.split("*").join("</br>");
-
-    function removeDuplicates(str) {
-      return str.split(" ").filter((word, i, arr) => word !== arr[i - 1]).join(" ");
-    }
-
-    let cleanResponse = removeDuplicates(NewResp2);
-    let words = cleanResponse.split(" ");
-
-    // 5) Typewriter-style update for bot message
-    let i = 0;
     const interval = setInterval(() => {
       setMessages(prev => {
         const updated = [...prev];
         const botIndex = updated.length - 1;
         updated[botIndex] = {
           ...updated[botIndex],
-          text: (updated[botIndex].text || "") + words[i] + " ",
+          text: (updated[botIndex].text || "") + (words[idx] || "") + " "
         };
         return updated;
       });
 
-      i++;
-      if (i >= words.length) {
+      idx++;
+      if (idx >= words.length) {
         clearInterval(interval);
         setIsLoading(false);
 
+        // Final persist: make sure the user message is stored and bot message is final
         setMessages(prev => {
           const updated = [...prev];
-          // replace the user message with the one that has the proper createdAt/image (if needed)
-          const userIndex = updated.findIndex(m => m.role === "user" && m.createdAt && (new Date(updated[updated.length-2]?.createdAt).getTime() === new Date(userMessage.createdAt).getTime()));
-          // fallback: try to find last user
-          if (userIndex === -1) {
-            // ensure the one added is set correctly
+          // Ensure user message stored correctly (match by timestamp)
+          const maybeUserMsgIndex = updated.findIndex(m => m.role === "user" && m.text === userMessage.text && new Date(m.createdAt).getTime() === new Date(userMessage.createdAt).getTime());
+          if (maybeUserMsgIndex === -1) {
+            // fallback: replace the second-last element (where user normally is)
             updated[updated.length - 2] = userMessage;
           } else {
-            updated[userIndex] = userMessage;
+            updated[maybeUserMsgIndex] = userMessage;
           }
           persistMessages(updated);
           return updated;
@@ -277,6 +231,7 @@ const Chats = ({ setChatId, chatId }) => {
       }
     }, 40);
   };
+
 
   useEffect(() => {
     if (!chatId) {
@@ -320,6 +275,9 @@ const Chats = ({ setChatId, chatId }) => {
 
   useEffect(() => setMounted(true), []);
 
+
+
+
   return (
     <div className="flex flex-col h-screen relative overflow-hidden bg-background">
       <div className="p-4 border-b border-border relative flex items-center gap-2 z-3 bg-background font-semibold">
@@ -359,9 +317,20 @@ const Chats = ({ setChatId, chatId }) => {
         />
 
 
-        <button onClick={handleMic} className="p-2 z-12 w-11 absolute bottom-5 right-19 h-10 flex items-center justify-center rounded-md border">
-          {!recording ? <Mic size={16} /> : <span className="loader"></span>}
-        </button>
+        <button
+        onClick={() =>
+          handleMic({ 
+            recognitionRef, 
+            recording, 
+            setRecording, 
+            setInput, 
+            language 
+          })
+        }
+        className="p-2 z-12 w-11 absolute bottom-5 right-19 h-10 flex items-center justify-center rounded-md border"
+      >
+        {!recording ? <Mic size={16} /> : <span className="loader"></span>}
+      </button>
 
         <button
           onClick={handleSend}

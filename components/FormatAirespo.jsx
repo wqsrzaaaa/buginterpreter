@@ -1,4 +1,4 @@
-function formatAIResponse(data) {
+export default function formatAIResponse(data) {
   let text = "";
 
   text += `❌ What went wrong\n${data.rootCause}\n\n`;

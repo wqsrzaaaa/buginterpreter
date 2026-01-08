@@ -16,13 +16,20 @@ const generationConfig = {
 };
 
 
-export async function run(userError, languageLabel = "English", imageInput = null) {
+function extractJSON(text) {
+  const first = text.indexOf("{");
+  const last = text.lastIndexOf("}");
+  if (first === -1 || last === -1) return null;
+  return text.slice(first, last + 1);
+}
+
+
+export async function run(userError, languageLabel = "English", imageBase64 = null) {
   const SYSTEM_PROMPT = `
 You are DebugSense, an expert AI debugging agent.
 
 STRICT RULES:
 - You MUST respond ONLY with valid JSON.
-- Do NOT include markdown, emojis, explanations, or text outside JSON.
 - If the input is NOT a programming error, return this exact JSON:
 
 {
@@ -34,7 +41,6 @@ TASK:
 Analyze the provided programming error, code, and optional screenshot.
 
 Return JSON in the following EXACT schema:
-
 {
   "errorType": "string",
   "rootCause": "string",
@@ -61,14 +67,45 @@ Return JSON in the following EXACT schema:
 Use simple ${languageLabel} language.
 `;
 
+  try {
+    const messageParts = [
+      { text: SYSTEM_PROMPT },
+      { text: userError },
+    ];
 
-   try {
+    if (imageBase64 && imageBase64.startsWith("data:")) {
+      const base64Data = imageBase64.split(",")[1];
+      messageParts.push({
+        inlineData: {
+          mimeType: "image/png",
+          data: base64Data,
+        },
+      });
+    }
+
     const result = await model.generateContent(messageParts, { generationConfig });
 
     const rawText = result.response.text();
+    const jsonText = extractJSON(rawText);
 
-    // Try parsing JSON
-    const parsed = JSON.parse(rawText);
+    let parsed = null;
+    try {
+      parsed = JSON.parse(jsonText);
+    } catch {
+      parsed = {
+        errorType: "UNSTRUCTURED_RESPONSE",
+        rootCause: "AI did not return valid JSON.",
+        location: { file: null, line: null },
+        fixes: [],
+        diagnosticSteps: [],
+        followUpQuestions: ["Please provide the full error text."]
+      };
+    }
+
+    console.log(rawText );
+    console.log(parsed);
+    
+    
 
     return {
       ok: true,
@@ -77,12 +114,15 @@ Use simple ${languageLabel} language.
     };
 
   } catch (error) {
+    console.error("AI PARSE ERROR:", error);
+
     return {
       ok: false,
       error: "MODEL_RESPONSE_ERROR",
-      message: "Failed to parse AI response.",
+      message: error.message,
     };
   }
 }
+
 
 export default run;

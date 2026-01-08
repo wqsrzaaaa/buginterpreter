@@ -3,14 +3,14 @@
 import run from '../app/MyApi';
 import { useLanguage } from "./context/LangProvider";
 import React, { useEffect, useRef, useState } from "react";
-import { Send, Bot, Mic, BrainCog, UploadCloud } from "lucide-react";
+import { Send, Bot, Mic, BrainCog, UploadCloud, Upload, Paperclip } from "lucide-react";
 import { doc, setDoc, getDoc, serverTimestamp, onSnapshot } from "firebase/firestore";
 import { db, storage } from "../Firebase";
 import { ref as storageRefFirebase, uploadBytes, getDownloadURL } from "firebase/storage";
 import Image from 'next/image';
 import AiRes from './AiRes';
 import formatAIResponse from '@/components/FormatAirespo'
-import VoiceInput, { handleMic } from './Handlemic';
+import { handleMic } from './Handlemic';
 
 const formatTime = (date) => {
   return new Date(date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
@@ -34,9 +34,8 @@ const Chats = ({ setChatId, chatId }) => {
   const [zoom, setzoom] = useState(false)
   const [ImageZoom, setImageZoom] = useState(null)
   const [imageFile, setImageFile] = useState(null);
-  const [uploadProgress, setUploadProgress] = useState(0);
 
-
+  const imageref = useRef()
   const recognitionRef = useRef()
   const textareaRef = useRef(null);
   const messagesContainerRef = useRef(null);
@@ -95,25 +94,6 @@ const Chats = ({ setChatId, chatId }) => {
     }
   };
 
- 
-
-
-
-  const uploadImageToFirebase = async (file) => {
-    if (!file || !chatId) return null;
-
-    const imageRef = storageRefFirebase(
-      storage,
-      `chat-images/${chatId}/${Date.now()}-${file.name}`
-    );
-
-    await uploadBytes(imageRef, file);
-
-    const httpsUrl = await getDownloadURL(imageRef);
-    return httpsUrl; // ✅ ONLY HTTPS URL
-  };
-
-
 
 
   const handleCopy = async (text, index) => {
@@ -123,35 +103,32 @@ const Chats = ({ setChatId, chatId }) => {
   };
 
 
-  const escapeHtml = (unsafe) => {
-    if (!unsafe && unsafe !== "") return "";
-    return String(unsafe)
-      .replaceAll("&", "&amp;")
-      .replaceAll("<", "&lt;")
-      .replaceAll(">", "&gt;")
-      .replaceAll('"', "&quot;")
-      .replaceAll("'", "&#039;");
+  const fileToBase64 = (file) => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.readAsDataURL(file);
+      reader.onload = () => resolve(reader.result);
+      reader.onerror = (err) => reject(err);
+    });
   };
 
-  function removeDuplicateWords(str) {
-    return str.split(" ").filter((word, i, arr) => word !== arr[i - 1]).join(" ");
-  }
 
   const onSent = async (userText) => {
-    if (!userText.trim() && !imageFile) return;
+    // Require typed text
+    if (!userText.trim()) return;
     if (isLoading) return;
 
     setInput("");
     setIsLoading(true);
+    setImagePreview(null)
 
-    let imageUrl = null;
+
+    let imageBase64 = null;
     if (imageFile) {
       try {
-        imageUrl = await uploadImageToFirebase(imageFile);
-        if (!imageUrl) imageUrl = imagePreview;
-      } catch (e) {
-        console.error("Upload error, using preview instead:", e);
-        imageUrl = imagePreview;
+        imageBase64 = await fileToBase64(imageFile);
+      } catch (err) {
+        console.error("Error converting file to base64", err);
       }
     }
 
@@ -159,79 +136,69 @@ const Chats = ({ setChatId, chatId }) => {
       role: "user",
       text: userText.replace(/\n/g, "<br />"),
       createdAt: new Date(),
-      image: imageUrl || null,
+      image: imageBase64 || null, // send base64 directly
     };
-
     setMessages(prev => {
       const newMsgs = [
         ...prev,
         userMessage,
-        { role: "bot", text: "", createdAt: new Date() } 
+        { role: "bot", text: "", data: null, createdAt: new Date() }, // bot placeholder
       ];
       persistMessages(newMsgs);
       return newMsgs;
     });
-    let aiText = "Sorry, I couldn't get a response right now.";
+
     try {
-      const aiResult = await run(userText, language.label, imageUrl);
+      let imageBase64 = null;
+      if (imageFile) imageBase64 = await fileToBase64(imageFile);
 
-      if (!aiResult || !aiResult.ok) {
-        aiText = "⚠️ Failed to analyze the error.";
-      } else {
-        const raw = formatAIResponse(aiResult.data || {});
-        const escaped = escapeHtml(raw);
-        aiText = escaped.replace(/\n/g, "<br />");
+      const aiResult = await run(userText, language.label, imageBase64);
+
+      if (!aiResult?.ok) {
+        setMessages(prev => {
+          const updated = [...prev];
+          updated[updated.length - 1] = {
+            ...updated[updated.length - 1],
+            text: "⚠️ Failed to analyze the error.",
+          };
+          return updated;
+        });
+        setIsLoading(false);
+        return;
       }
-    } catch (e) {
-      console.error("AI call error:", e);
-      aiText = "Sorry, I couldn't get a response right now.";
-    }
 
-    let cleanResponse = removeDuplicateWords(aiText);
-    cleanResponse = cleanResponse
-      .replace(/\*\*(.+?)\*\*/g, "<b>$1</b>")
-      .replace(/\*(.+?)\*/g, "<i>$1</i>");
+      const botMessage = {
+        role: "bot",
+        text: "",
+        data: aiResult.data,
+        createdAt: new Date(),
+        image: null,
+      };
 
-    const words = cleanResponse.split(" ");
-    let idx = 0;
-
-    const interval = setInterval(() => {
       setMessages(prev => {
         const updated = [...prev];
-        const botIndex = updated.length - 1;
-        updated[botIndex] = {
-          ...updated[botIndex],
-          text: (updated[botIndex].text || "") + (words[idx] || "") + " "
-        };
+        updated[updated.length - 1] = botMessage;
+        persistMessages(updated);
         return updated;
       });
 
-      idx++;
-      if (idx >= words.length) {
-        clearInterval(interval);
-        setIsLoading(false);
+      setIsLoading(false);
+      setImageFile(null);
+      setImagePreview(null);
 
-        // Final persist: make sure the user message is stored and bot message is final
-        setMessages(prev => {
-          const updated = [...prev];
-          // Ensure user message stored correctly (match by timestamp)
-          const maybeUserMsgIndex = updated.findIndex(m => m.role === "user" && m.text === userMessage.text && new Date(m.createdAt).getTime() === new Date(userMessage.createdAt).getTime());
-          if (maybeUserMsgIndex === -1) {
-            // fallback: replace the second-last element (where user normally is)
-            updated[updated.length - 2] = userMessage;
-          } else {
-            updated[maybeUserMsgIndex] = userMessage;
-          }
-          persistMessages(updated);
-          return updated;
-        });
-
-        setImageFile(null);
-        setImagePreview(null);
-      }
-    }, 40);
+    } catch (e) {
+      console.error("AI call error:", e);
+      setMessages(prev => {
+        const updated = [...prev];
+        updated[updated.length - 1] = {
+          ...updated[updated.length - 1],
+          text: "⚠️ AI call failed.",
+        };
+        return updated;
+      });
+      setIsLoading(false);
+    }
   };
-
 
   useEffect(() => {
     if (!chatId) {
@@ -296,6 +263,17 @@ const Chats = ({ setChatId, chatId }) => {
         Bot={Bot}
       />
       <div className="p-3 flex flex-wrap items-end bg-transparent ">
+        {zoom && (
+          <div onClick={() => setzoom(false)} className='w-full h-screen fixed top-0 left-0 z-999 flex items-center justify-center '>
+            <div className='w-full h-full absolute left-0 top-0 bg-black/30'></div>
+            <Image src={imagePreview} width={704} height={704} className='w-[80%]  h-[90%] object-contain rounded-md' alt='myerrorimage' />
+          </div>
+        )}
+        {imagePreview && (
+          <div className=' w-full h-24 mb-2 pl-3'>
+            <Image onClick={() => setzoom(true)} src={imagePreview} width={34} height={34} className='w-24  h-24 object-cover rounded-md' alt='myerrorimage' />
+          </div>
+        )}
         <textarea
           ref={textareaRef}
           value={Input}
@@ -312,25 +290,48 @@ const Chats = ({ setChatId, chatId }) => {
               if (textareaRef.current) textareaRef.current.style.height = "auto";
             }
           }}
-          placeholder="Type anything..."
+          placeholder="Paste your error..."
           className="flex-1 px-3 py-2 min-h-12 relative z-6 mr-2 pr-25 custom-scrollbar resize-none border border-hardborder rounded-xl bg-transparent placeholder:text-muted-foreground focus:border-primary focus:ring-1 focus:ring-ring"
         />
 
 
         <button
-        onClick={() =>
-          handleMic({ 
-            recognitionRef, 
-            recording, 
-            setRecording, 
-            setInput, 
-            language 
-          })
-        }
-        className="p-2 z-12 w-11 absolute bottom-5 right-19 h-10 flex items-center justify-center rounded-md border"
-      >
-        {!recording ? <Mic size={16} /> : <span className="loader"></span>}
-      </button>
+          onClick={() => imageref.current.click()}
+          className="p-2 z-12 w-11 absolute bottom-5 right-31 h-10 flex items-center justify-center rounded-md border"
+        >
+          {<Paperclip size={16} className='-rotate-45' />}
+        </button>
+        <input
+          type="file"
+          className="hidden"
+          ref={imageref}
+          accept="image/*"
+          onChange={(e) => {
+            const file = e.target.files?.[0];
+            if (file) {
+              setImageFile(file);
+              const reader = new FileReader();
+              reader.onload = () => setImagePreview(reader.result);
+              reader.readAsDataURL(file);
+            }
+          }}
+        />
+
+
+        <button
+          onClick={() =>
+            handleMic({
+              recognitionRef,
+              recording,
+              setRecording,
+              setInput,
+              language
+            })
+          }
+          className="p-2 z-12 w-11 absolute bottom-5 right-19 h-10 flex items-center justify-center rounded-md border"
+        >
+          {!recording ? <Mic size={16} /> : <span className="loader"></span>}
+        </button>
 
         <button
           onClick={handleSend}

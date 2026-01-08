@@ -34,6 +34,7 @@ const Chats = ({ setChatId, chatId }) => {
   const [zoom, setzoom] = useState(false)
   const [ImageZoom, setImageZoom] = useState(null)
   const [imageFile, setImageFile] = useState(null);
+  const [globleimg, setglobleimg] = useState(null)
 
   const imageref = useRef()
   const recognitionRef = useRef()
@@ -113,6 +114,45 @@ const Chats = ({ setChatId, chatId }) => {
   };
 
 
+  const typeText = (fullText, messageIndex, speed = 40) => {
+    const words = fullText.split(" ");
+    let current = "";
+
+    let i = 0;
+    const interval = setInterval(() => {
+      current += (i === 0 ? "" : " ") + words[i];
+
+      setMessages(prev => {
+        const updated = [...prev];
+        updated[messageIndex] = {
+          ...updated[messageIndex],
+          text: current,
+        };
+        return updated;
+      });
+
+      i++;
+      if (i >= words.length) {
+        clearInterval(interval);
+      }
+    }, speed);
+  };
+
+  const extractTextFromAI = (data) => {
+  if (data?.rootCause) {
+    return `❌ What Went Wrong\n\n${data.rootCause}`;
+  }
+
+  if (data?.message) {
+    return data.message;
+  }
+
+  return "No response from AI.";
+};
+
+
+
+
   const onSent = async (userText) => {
     // Require typed text
     if (!userText.trim()) return;
@@ -136,7 +176,7 @@ const Chats = ({ setChatId, chatId }) => {
       role: "user",
       text: userText.replace(/\n/g, "<br />"),
       createdAt: new Date(),
-      image: imageBase64 || null, // send base64 directly
+      image: imageBase64 || null, 
     };
     setMessages(prev => {
       const newMsgs = [
@@ -167,20 +207,29 @@ const Chats = ({ setChatId, chatId }) => {
         return;
       }
 
-      const botMessage = {
-        role: "bot",
-        text: "",
-        data: aiResult.data,
-        createdAt: new Date(),
-        image: null,
-      };
+      const messageIndex = messages.length + 1; 
 
-      setMessages(prev => {
-        const updated = [...prev];
-        updated[updated.length - 1] = botMessage;
-        persistMessages(updated);
-        return updated;
-      });
+      const plainText = extractTextFromAI(aiResult.data);
+
+      typeText(plainText, messageIndex);
+
+      setTimeout(() => {
+        setMessages(prev => {
+          const updated = [...prev];
+          updated[messageIndex] = {
+            ...updated[messageIndex],
+            text: plainText,
+            data: aiResult.data, // attach later
+          };
+          persistMessages(updated);
+          return updated;
+        });
+
+        setIsLoading(false);
+        setImageFile(null);
+        setImagePreview(null);
+      }, plainText.split(" ").length * 40 + 200);
+
 
       setIsLoading(false);
       setImageFile(null);
@@ -227,23 +276,7 @@ const Chats = ({ setChatId, chatId }) => {
 
   const [showThinking, setShowThinking] = useState(false);
 
-  useEffect(() => {
-    let timer;
-    if (isLoading) {
-      timer = setTimeout(() => {
-        setShowThinking(true);
-      }, 6000);
-    } else {
-      setShowThinking(false);
-    }
-
-    return () => clearTimeout(timer);
-  }, [isLoading]);
-
   useEffect(() => setMounted(true), []);
-
-
-
 
   return (
     <div className="flex flex-col h-screen relative overflow-hidden bg-background">
@@ -261,17 +294,19 @@ const Chats = ({ setChatId, chatId }) => {
         handleCopy={handleCopy}
         copiedIndex={copiedIndex}
         Bot={Bot}
+        setzoom={setzoom}
+        setglobleimg={setglobleimg}
       />
       <div className="p-3 flex flex-wrap items-end bg-transparent ">
         {zoom && (
           <div onClick={() => setzoom(false)} className='w-full h-screen fixed top-0 left-0 z-999 flex items-center justify-center '>
             <div className='w-full h-full absolute left-0 top-0 bg-black/30'></div>
-            <Image src={imagePreview} width={704} height={704} className='w-[80%]  h-[90%] object-contain rounded-md' alt='myerrorimage' />
+            <Image src={globleimg} width={704} height={704} className='w-[80%]  h-[90%] object-contain rounded-md' alt='myerrorimage' />
           </div>
         )}
         {imagePreview && (
           <div className=' w-full h-24 mb-2 pl-3'>
-            <Image onClick={() => setzoom(true)} src={imagePreview} width={34} height={34} className='w-24  h-24 object-cover rounded-md' alt='myerrorimage' />
+            <Image onClick={() => (setzoom(true), setglobleimg(imagePreview))} src={imagePreview} width={34} height={34} className='w-24  h-24 object-cover rounded-md' alt='myerrorimage' />
           </div>
         )}
         <textarea
@@ -323,6 +358,7 @@ const Chats = ({ setChatId, chatId }) => {
             handleMic({
               recognitionRef,
               recording,
+              Input,
               setRecording,
               setInput,
               language

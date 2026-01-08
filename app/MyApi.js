@@ -53,8 +53,6 @@ Return JSON in the following EXACT schema:
       "type": "minimal | best_practice",
       "patch": "string",
       "explanation": {
-        "beginner": "string",
-        "intermediate": "string",
         "advanced": "string"
       },
       "confidence": "number"

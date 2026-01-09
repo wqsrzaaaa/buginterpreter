@@ -24,7 +24,7 @@ function extractJSON(text) {
 }
 
 
-export async function run(userError, languageLabel = "English", imageBase64 = null) {
+export async function run(userError, languageLabel = "English", imageBase64 = null, context = '') {
   const SYSTEM_PROMPT = `
 You are DebugSense, an expert AI debugging agent.
 
@@ -66,9 +66,14 @@ Use simple ${languageLabel} language.
 `;
 
   try {
+    const contextText = context?.length
+      ? `PREVIOUS CONTEXT (for reference only):\n${context}`
+      : "";
+
     const messageParts = [
       { text: SYSTEM_PROMPT },
-      { text: userError },
+      ...(contextText ? [{ text: contextText }] : []),
+      { text: userError }
     ];
 
     if (imageBase64 && imageBase64.startsWith("data:")) {
@@ -81,7 +86,16 @@ Use simple ${languageLabel} language.
       });
     }
 
-    const result = await model.generateContent(messageParts, { generationConfig });
+    const result = await model.generateContent({
+      contents: [
+        {
+          role: "user",
+          parts: messageParts,
+        },
+      ],
+      generationConfig,
+    });
+
 
     const rawText = result.response.text();
     const jsonText = extractJSON(rawText);
@@ -100,10 +114,10 @@ Use simple ${languageLabel} language.
       };
     }
 
-    console.log(rawText );
+    console.log(rawText);
     console.log(parsed);
-    
-    
+
+
 
     return {
       ok: true,

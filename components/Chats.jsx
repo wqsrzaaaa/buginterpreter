@@ -11,6 +11,7 @@ import Image from 'next/image';
 import AiRes from './AiRes';
 import formatAIResponse from '@/components/FormatAirespo'
 import { handleMic } from './Handlemic';
+import { useTheme } from 'next-themes';
 
 const formatTime = (date) => {
   return new Date(date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
@@ -139,29 +140,39 @@ const Chats = ({ setChatId, chatId }) => {
   };
 
   const extractTextFromAI = (data) => {
-  if (data?.rootCause) {
-    return `❌ What Went Wrong\n\n${data.rootCause}`;
-  }
+    if (data?.rootCause) {
+      return `❌ What Went Wrong\n\n${data.rootCause}`;
+    }
 
-  if (data?.message) {
-    return data.message;
-  }
+    if (data?.message) {
+      return data.message;
+    }
 
-  return "No response from AI.";
-};
+    return "No response from AI.";
+  };
+
+
+  const buildDebugContext = (messages) => {
+    const recent = messages.slice(-6);
+
+    return recent
+      .map((m, i) => {
+        const text = m.text ? m.text.replace(/<br\s*\/?>/g, "\n") : "";
+        return `${m.role === "user" ? "User" : "AI"} message ${i + 1}: ${text}`;
+      })
+      .join("\n");
+  };
 
 
 
 
   const onSent = async (userText) => {
-    // Require typed text
     if (!userText.trim()) return;
     if (isLoading) return;
 
     setInput("");
     setIsLoading(true);
-    setImagePreview(null)
-
+    setImagePreview(null);
 
     let imageBase64 = null;
     if (imageFile) {
@@ -176,26 +187,27 @@ const Chats = ({ setChatId, chatId }) => {
       role: "user",
       text: userText.replace(/\n/g, "<br />"),
       createdAt: new Date(),
-      image: imageBase64 || null, 
+      image: imageBase64 || null,
     };
-    setMessages(prev => {
+
+    setMessages((prev) => {
       const newMsgs = [
         ...prev,
         userMessage,
-        { role: "bot", text: "", data: null, createdAt: new Date() }, // bot placeholder
+        { role: "bot", text: "", data: null, createdAt: new Date() }, // placeholder for AI
       ];
       persistMessages(newMsgs);
       return newMsgs;
     });
 
     try {
-      let imageBase64 = null;
-      if (imageFile) imageBase64 = await fileToBase64(imageFile);
+      // Build context from existing messages
+      const context = buildDebugContext(messages);
 
-      const aiResult = await run(userText, language.label, imageBase64);
+      const aiResult = await run(userText, "English", imageBase64, context);
 
       if (!aiResult?.ok) {
-        setMessages(prev => {
+        setMessages((prev) => {
           const updated = [...prev];
           updated[updated.length - 1] = {
             ...updated[updated.length - 1],
@@ -207,37 +219,30 @@ const Chats = ({ setChatId, chatId }) => {
         return;
       }
 
-      const messageIndex = messages.length + 1; 
-
+      const messageIndex = messages.length + 1;
       const plainText = extractTextFromAI(aiResult.data);
 
       typeText(plainText, messageIndex);
 
       setTimeout(() => {
-        setMessages(prev => {
+        setMessages((prev) => {
           const updated = [...prev];
           updated[messageIndex] = {
             ...updated[messageIndex],
             text: plainText,
-            data: aiResult.data, // attach later
+            data: aiResult.data,
           };
           persistMessages(updated);
           return updated;
         });
-
         setIsLoading(false);
         setImageFile(null);
         setImagePreview(null);
       }, plainText.split(" ").length * 40 + 200);
 
-
-      setIsLoading(false);
-      setImageFile(null);
-      setImagePreview(null);
-
     } catch (e) {
       console.error("AI call error:", e);
-      setMessages(prev => {
+      setMessages((prev) => {
         const updated = [...prev];
         updated[updated.length - 1] = {
           ...updated[updated.length - 1],
@@ -248,6 +253,7 @@ const Chats = ({ setChatId, chatId }) => {
       setIsLoading(false);
     }
   };
+
 
   useEffect(() => {
     if (!chatId) {
@@ -278,10 +284,31 @@ const Chats = ({ setChatId, chatId }) => {
 
   useEffect(() => setMounted(true), []);
 
+  useEffect(() => {
+    if (!isLoading) return; // only run when loading starts
+
+    const timer = setTimeout(() => {
+      setShowThinking(true);
+    }, 6000);
+
+    // cleanup in case isLoading changes before timeout
+    return () => clearTimeout(timer);
+  }, [isLoading]);
+
+
+
+  const { theme } = useTheme();
+  if (!mounted) return null;
+
   return (
     <div className="flex flex-col h-screen relative overflow-hidden bg-background">
-      <div className="p-4 border-b border-border relative flex items-center gap-2 z-3 bg-background font-semibold">
-        <BrainCog /> Bug Interpreter
+      <div className="p-2 relative flex items-center gap-2 z-3 font-semibold">
+        <Image
+          src={theme === "dark" ? "/logo2.png" : "/logo1.png"}
+          alt="logo"
+          width={45}
+          height={45}
+        />
       </div>
 
       <AiRes

@@ -19,7 +19,7 @@ const AiRes = ({
   setglobleimg
 }) => {
   const router = useRouter()
-
+    
   return (
     <div
       ref={messagesContainerRef}
@@ -173,9 +173,9 @@ const AiRes = ({
               {msg.role === "bot" && mounted && (msg.text || msg.data) && (
                 <button
                   onClick={() => handleCopy(msg.text || JSON.stringify(msg.data, null, 2), index)}
-                  className="absolute -bottom-10 right-0 cursor-pointer opacity-100  transition-opacity p-2 rounded-md hover:bg-hoverbg"
+                  className="absolute -bottom-10 right-0 cursor-pointer opacity-100  transition-opacity p-2 rounded-md hover:bg-hoverbg" 
                 >
-                  {copiedIndex === index ? <div className="flex items-center gap-1 text-cardbg"> <Check size={14} className="text-green-600" /> Copied</div> : (<div className="flex items-center gap-1 text-cardbg"> <Copy size={14} className="text-zinc-400" /> Copy</div>)}
+                  {copiedIndex === index ? <div className="flex items-center gap-1  text-foreground"> <Check size={14} className="text-green-600" /> Copied</div> : (<div className="flex items-center gap-1 text-foreground"> <Copy size={14} className="text-foreground" /> Copy</div>)}
                 </button>
               )}
             </div>

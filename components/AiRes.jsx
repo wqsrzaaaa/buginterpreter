@@ -3,6 +3,7 @@ import LoaderAI from "./LoaderAI";
 import { Timestamp } from "firebase/firestore";
 import { Check, Copy, User } from "lucide-react";
 import Image from "next/image";
+import { useRouter } from "next/navigation";
 
 const AiRes = ({
   messagesContainerRef,
@@ -17,6 +18,7 @@ const AiRes = ({
   setzoom,
   setglobleimg
 }) => {
+  const router = useRouter()
 
   return (
     <div
@@ -27,7 +29,7 @@ const AiRes = ({
         messages.map((msg, index) => (
           <div
             key={index}
-            className={`flex gap-2 ${msg.role === "user" ? "justify-end" : "justify-start"}`}
+            className={`flex gap-2 mb-5 ${msg.role === "user" ? "justify-end" : "justify-start"}`}
           >
             {msg.role === "bot" && <Bot size={20} />}
 
@@ -53,13 +55,13 @@ const AiRes = ({
                     msg.data.rootCause ? (
                       <>
 
-                      <div className="p-3 border-b border-border py-6">
+                        <div className="p-3 border-b border-border py-6 break-words">
                           <p className="font-bold text-xl">‼️ Error type</p>
                           <p className="text-sm whitespace-pre-wrap">
                             {msg.data.errorType}
                           </p>
                         </div>
-                        <div className="p-3 border-b border-border py-6">
+                        <div className="p-3 border-b border-border py-6 break-words">
                           <p className="font-bold text-xl">❌ What Went Wrong</p>
                           <p className="text-sm whitespace-pre-wrap">
                             {msg.data.rootCause}
@@ -67,16 +69,29 @@ const AiRes = ({
                         </div>
 
                         {msg.data.location?.file && (
-                          <div className="p-3 rounded border-b">
+                          <div className="p-3 rounded font-sans  border-b break-words">
                             <p className="font-bold text-xl">📍 Location</p>
-                            <p className="text-sm italic">
-                              {`${msg.data.location.file}:${msg.data.location.line ?? ""}`}
+                            <p
+                              className={`text-sm ${msg?.data?.location?.file?.startsWith == 'https'
+                                  ? "text-blue-500 underline cursor-pointer"
+                                  : ""
+                                }`}
+                              onClick={() => {
+                                if (msg?.data?.location?.file) {
+                                  const link = `${msg.data.location.file}${msg.data.location.line ? `:${msg.data.location.line}` : ""
+                                    }`;
+                                  router.push(link);
+                                }
+                              }}
+                            >
+                              {msg?.data?.location?.file?.startsWith('https') ? "Direct link" : msg?.data?.location?.file}
                             </p>
+
                           </div>
                         )}
 
                         {msg.data.fixes?.length > 0 && (
-                          <div className="p-3 rounded border-b flex flex-col gap-2">
+                          <div className="p-3 rounded border-b flex flex-col gap-2 break-words">
                             <p className="font-bold text-xl">✅ Fixes</p>
                             {msg.data.fixes.map((fix, fIndex) => (
                               <div key={fIndex} className="mt-2 flex flex-col gap-6">
@@ -87,7 +102,7 @@ const AiRes = ({
                                   {fix.patch}
                                 </pre>
                                 <div className="text-xl">
-                                  <b>Explanation: </b> 
+                                  <b>Explanation: </b>
                                   <span className="text-sm font-light">{fix.explanation.advanced}</span>
                                 </div>
 
@@ -103,7 +118,7 @@ const AiRes = ({
                         )}
 
                         {msg.data.diagnosticSteps?.length > 0 && (
-                          <div className="p-3 rounded border-b border-border py-6">
+                          <div className="p-3 rounded border-b border-border py-6 break-words ">
                             <h2 className="font-bold text-xl pb-2">🧪 Diagnostic Steps</h2>
                             <ul className="list-disc list-inside text-sm">
                               {msg.data.diagnosticSteps.map((step, i) => (
@@ -119,7 +134,7 @@ const AiRes = ({
                         )}
 
                         {msg.data.followUpQuestions?.length > 0 && (
-                          <div className="p-3 rounded border-b border-border py-6">
+                          <div className="p-3 rounded border-b border-border py-6 break-words">
                             <h2 className="font-bold text-xl pb-2">❓ Following up questions</h2>
                             <ul className="list-disc list-inside text-sm">
                               {msg.data.followUpQuestions.map((step, i) => (

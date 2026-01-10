@@ -161,14 +161,17 @@ const AiRes = ({
                       {msg.text}
                     </p>
                   )}
-                </div>
-              )}
 
-              {mounted && msg.createdAt && (
+                 {mounted && msg.createdAt && (
                 <div className="text-xs text-zinc-400 mt-1">
                   {formatTime(msg.createdAt instanceof Timestamp ? msg.createdAt.toDate() : new Date(msg.createdAt))}
                 </div>
               )}
+                </div>
+
+              )}
+
+             
 
               {msg.role === "bot" && mounted && (msg.text || msg.data) && (
                 <button

@@ -7,6 +7,9 @@ const model = genAI.getGenerativeModel({
   model: "gemini-2.5-flash",
 });
 
+
+
+
 const generationConfig = {
   temperature: 0.2,
   topP: 0.9,
@@ -16,15 +19,7 @@ const generationConfig = {
 };
 
 
-function extractJSON(text) {
-  const first = text.indexOf("{");
-  const last = text.lastIndexOf("}");
-  if (first === -1 || last === -1) return null;
-  return text.slice(first, last + 1);
-}
-
-
-export async function run(userError, languageLabel = "English", imageBase64 = null, context = '') {
+export async function run(userError, languageLabel = "English", imageBase64 = null) {
   const SYSTEM_PROMPT = `
 You are DebugSense, an expert AI debugging agent.
 
@@ -65,44 +60,27 @@ Return JSON in the following EXACT schema:
 Use simple ${languageLabel} language.
 `;
 
+
   try {
-    const contextText = context?.length
-      ? `PREVIOUS CONTEXT (for reference only):\n${context}`
-      : "";
+    // Escape quotes to prevent JSON breaking
+    const safeError = userError.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
 
-    const messageParts = [
-      { text: SYSTEM_PROMPT },
-      ...(contextText ? [{ text: contextText }] : []),
-      { text: userError }
-    ];
-
-    if (imageBase64 && imageBase64.startsWith("data:")) {
-      const base64Data = imageBase64.split(",")[1];
-      messageParts.push({
-        inlineData: {
-          mimeType: "image/png",
-          data: base64Data,
-        },
-      });
-    }
-
+    // Just send the user error as plain text
     const result = await model.generateContent({
       contents: [
         {
           role: "user",
-          parts: messageParts,
+          parts: [{ text: safeError }],
         },
       ],
       generationConfig,
     });
 
-
     const rawText = result.response.text();
-    const jsonText = extractJSON(rawText);
 
     let parsed = null;
     try {
-      parsed = JSON.parse(jsonText);
+      parsed = JSON.parse(rawText);
     } catch {
       parsed = {
         errorType: "UNSTRUCTURED_RESPONSE",
@@ -114,25 +92,11 @@ Use simple ${languageLabel} language.
       };
     }
 
-    console.log(rawText);
-    console.log(parsed);
+    return { ok: true, data: parsed, raw: rawText };
 
-
-
-    return {
-      ok: true,
-      data: parsed,
-      raw: rawText,
-    };
-
-  } catch (error) {
-    console.error("AI PARSE ERROR:", error);
-
-    return {
-      ok: false,
-      error: "MODEL_RESPONSE_ERROR",
-      message: error.message,
-    };
+  } catch (err) {
+    console.error("AI PARSE ERROR:", err);
+    return { ok: false, error: "MODEL_RESPONSE_ERROR", message: err.message };
   }
 }
 

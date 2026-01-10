@@ -3,13 +3,11 @@
 import run from '../app/MyApi';
 import { useLanguage } from "./context/LangProvider";
 import React, { useEffect, useRef, useState } from "react";
-import { Send, Bot, Mic, BrainCog, UploadCloud, Upload, Paperclip } from "lucide-react";
+import { Send, Bot, Mic, Paperclip } from "lucide-react";
 import { doc, setDoc, getDoc, serverTimestamp, onSnapshot } from "firebase/firestore";
-import { db, storage } from "../Firebase";
-import { ref as storageRefFirebase, uploadBytes, getDownloadURL } from "firebase/storage";
+import { db } from "../Firebase";
 import Image from 'next/image';
 import AiRes from './AiRes';
-import formatAIResponse from '@/components/FormatAirespo'
 import { handleMic } from './Handlemic';
 import { useTheme } from 'next-themes';
 
@@ -33,7 +31,6 @@ const Chats = ({ setChatId, chatId }) => {
   const [mounted, setMounted] = useState(false);
   const [imagePreview, setImagePreview] = useState(null);
   const [zoom, setzoom] = useState(false)
-  const [ImageZoom, setImageZoom] = useState(null)
   const [imageFile, setImageFile] = useState(null);
   const [globleimg, setglobleimg] = useState(null)
 
@@ -55,47 +52,10 @@ const Chats = ({ setChatId, chatId }) => {
   }, []);
 
   useEffect(() => {
-    if (!chatId) return;
-    const load = async () => {
-      try {
-        const chatRef = doc(db, "chats", chatId);
-        const snap = await getDoc(chatRef);
-        if (snap.exists()) {
-          const data = snap.data();
-          if (data.messages && Array.isArray(data.messages) && data.messages.length > 0) {
-            setMessages(data.messages);
-          } else {
-            // initialize doc
-            await setDoc(chatRef, { messages: defaultWelcome, userId: "anonymous", createdAt: serverTimestamp() }, { merge: true });
-            setMessages(defaultWelcome);
-          }
-        } else {
-          await setDoc(chatRef, { messages: defaultWelcome, userId: "anonymous", createdAt: serverTimestamp() });
-          setMessages(defaultWelcome);
-        }
-      } catch (e) {
-        console.error("Failed to load chat:", e);
-      }
-    };
-    load();
-  }, [chatId]);
-
-  useEffect(() => {
     if (messagesContainerRef.current) {
       messagesContainerRef.current.scrollTop = messagesContainerRef.current.scrollHeight + 200;
     }
   }, [messages]);
-
-  const persistMessages = async (msgs) => {
-    if (!chatId) return;
-    try {
-      const chatRef = doc(db, "chats", chatId);
-      await setDoc(chatRef, { messages: msgs }, { merge: true });
-    } catch (e) {
-      console.error("Failed to persist messages:", e);
-    }
-  };
-
 
 
   const handleCopy = async (text, index) => {
@@ -151,21 +111,6 @@ const Chats = ({ setChatId, chatId }) => {
     return "No response from AI.";
   };
 
-
-  const buildDebugContext = (messages) => {
-    const recent = messages.slice(-6);
-
-    return recent
-      .map((m, i) => {
-        const text = m.text ? m.text.replace(/<br\s*\/?>/g, "\n") : "";
-        return `${m.role === "user" ? "User" : "AI"} message ${i + 1}: ${text}`;
-      })
-      .join("\n");
-  };
-
-
-
-
   const onSent = async (userText) => {
     if (!userText.trim()) return;
     if (isLoading) return;
@@ -196,15 +141,12 @@ const Chats = ({ setChatId, chatId }) => {
         userMessage,
         { role: "bot", text: "", data: null, createdAt: new Date() }, // placeholder for AI
       ];
-      persistMessages(newMsgs);
       return newMsgs;
     });
 
     try {
-      // Build context from existing messages
-      const context = buildDebugContext(messages);
 
-      const aiResult = await run(userText, "English", imageBase64, context);
+      const aiResult = await run(userText, "English", imageBase64);
 
       if (!aiResult?.ok) {
         setMessages((prev) => {
@@ -232,7 +174,6 @@ const Chats = ({ setChatId, chatId }) => {
             text: plainText,
             data: aiResult.data,
           };
-          persistMessages(updated);
           return updated;
         });
         setIsLoading(false);
@@ -290,8 +231,6 @@ const Chats = ({ setChatId, chatId }) => {
     const timer = setTimeout(() => {
       setShowThinking(true);
     }, 6000);
-
-    // cleanup in case isLoading changes before timeout
     return () => clearTimeout(timer);
   }, [isLoading]);
 

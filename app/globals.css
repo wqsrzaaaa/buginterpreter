@@ -74,8 +74,8 @@
 
 :root {
   --radius: 0.625rem;
-  --background: oklch(1 0 0);
-  --hoverbg: oklch(88.837% 0.0001 271.152);
+  --background: oklch(1 0 0); 
+  --hoverbg: oklch(96.569% 0.00211 14.3 36);
   --cardbg :  oklch(43.861% 0.00005 271.152);
   --foreground: oklch(0.145 0 0);
   --card: oklch(1 0 0);
@@ -106,16 +106,16 @@
   --sidebar-primary-foreground: hsl(0 0% 98%);
   --sidebar-accent: hsl(240 4.8% 95.9%);
   --sidebar-accent-foreground: hsl(240 5.9% 10%);
-  --sidebar-border: hsl(220 13% 91%);
+  --sidebar-border: hsl(0, 0%, 12%);
   --sidebar-ring: hsl(217.2 91.2% 59.8%);
 }
 
 .dark {
   --background: oklch(0.145 0 0);
-  --hoverbg: oklch(32.605% 0.0014 15.77);
+  --hoverbg: oklch(19.125% 0.00002 271.152);
   --cardbg :  oklch(19.125% 0.00002 271.152);
   --foreground: oklch(0.985 0 0);
-  --card: oklch(0.205 0 0);
+  --card: oklch(0.205 0 0); 
   --card-foreground: oklch(0.985 0 0);
   --popover: oklch(0.205 0 0);
   --popover-foreground: oklch(0.985 0 0);
@@ -143,7 +143,7 @@
   --sidebar-primary-foreground: hsl(0 0% 100%);
   --sidebar-accent: hsl(240 3.7% 15.9%);
   --sidebar-accent-foreground: hsl(240 4.8% 95.9%);
-  --sidebar-border: hsl(240 3.7% 15.9%);
+  --sidebar-border: hsl(0, 0%, 73%);
   --sidebar-ring: hsl(217.2 91.2% 59.8%);
 }
 
@@ -236,33 +236,35 @@
   transform-origin: 70% 70%;
 }
 
-/* From Uiverse.io by realrobertlogan */ 
-.traffic-loader {
-  width: 40px;
-  height: 40px; 
-  --c: radial-gradient(farthest-side, #fff 92%, #0000);
-  background: var(--c) 50% 0, var(--c) 50% 100%, var(--c) 100% 50%,
-    var(--c) 0 50%;
-  background-size: 10px 10px; 
-  background-repeat: no-repeat;
-  animation: s8 1s infinite;
+.loader-wrapper {
   position: relative;
+  width: 35px;
+  height: 35px;
 }
 
-.traffic-loader::before {
-  content: "";
-  position: absolute; 
-  inset: 0;
-  margin: 3px; 
-  background: repeating-conic-gradient(#0000 0 35deg, #fff 0 90deg);
-  -webkit-mask: radial-gradient(farthest-side, #0000 calc(100% - 3px), #000 0);
-  border-radius: 50%;
+.svg {
+  width: 100%;
+  height: 100%;
+  animation: rotate4 2s linear infinite;
 }
 
-@keyframes s8 {
-  100% {
-    transform: rotate(0.5turn);
-  }
+.circle {
+  fill: none;
+  stroke: var(--sidebar-border); 
+  stroke-width: 2;
+  stroke-dasharray: 1, 200;
+  stroke-linecap: round;
+  animation: dash4 1.5s ease-in-out infinite;
 }
 
-
+@keyframes rotate4 { 100% { transform: rotate(360deg); } }
+@keyframes dash4 { 0% { stroke-dasharray: 1, 200; stroke-dashoffset: 0; } 50% { stroke-dasharray: 90, 200; stroke-dashoffset: -35px; } 100% { stroke-dashoffset: -125px; } }
+ 
+.loader-logo {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -55%);
+  pointer-events: none;
+}
+ 

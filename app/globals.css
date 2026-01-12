@@ -75,7 +75,7 @@
 :root {
   --radius: 0.625rem;
   --background: oklch(1 0 0); 
-  --hoverbg: oklch(96.569% 0.00211 14.3 36);
+  --hoverbg: oklch(94.007% 0.00011 271.152);
   --cardbg :  oklch(43.861% 0.00005 271.152);
   --foreground: oklch(0.145 0 0);
   --card: oklch(1 0 0);

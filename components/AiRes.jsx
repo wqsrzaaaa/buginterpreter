@@ -4,6 +4,7 @@ import { Timestamp } from "firebase/firestore";
 import { Check, Copy, User } from "lucide-react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
+import { useTheme } from "next-themes";
 
 const AiRes = ({
   messagesContainerRef,
@@ -14,12 +15,14 @@ const AiRes = ({
   formatTime,
   handleCopy,
   copiedIndex,
-  Bot,
   setzoom,
   setglobleimg
 }) => {
   const router = useRouter()
-    
+  const { theme } = useTheme();
+
+
+
   return (
     <div
       ref={messagesContainerRef}
@@ -31,7 +34,24 @@ const AiRes = ({
             key={index}
             className={`flex gap-2 mb-5 ${msg.role === "user" ? "justify-end" : "justify-start"}`}
           >
-            {msg.role === "bot" && <Bot size={20} />}
+            {msg.role === "bot" && (
+              (isLoading && index === 0) ? (   // only show loader for first bot message
+                <div className="w-9 h-9">
+                  <LoaderAI />
+                </div>
+              ) : (
+                <div className="w-8 h-8">
+                  <Image
+                    width={35}
+                    height={35}
+                    unoptimized
+                    src={theme === 'dark' ? '/logo2.png' : '/logo1.png'}
+                    alt="logo"
+                  />
+                </div>
+              )
+            )}
+
 
             <div
               className={`relative group px-4 py-2 mb-7 rounded-lg max-w-[70%] w-auto text-sm ${msg.role === "user" ? "bg-blue-600 text-white" : "bg-hoverbg text-foreground"
@@ -48,7 +68,9 @@ const AiRes = ({
                 />
               )}
               {msg.role === "bot" && isLoading && index === messages.length - 1 ? (
-                <LoaderAI showThinking={showThinking} />
+                <span className="text-sm">
+                  {showThinking ? "Thinking for better response..." : "Typing..."}
+                </span>
               ) : (
                 <div className="flex flex-col gap-4">
                   {msg.data ? (
@@ -73,8 +95,8 @@ const AiRes = ({
                             <p className="font-bold text-xl">📍 Location</p>
                             <p
                               className={`text-sm ${msg?.data?.location?.file?.startsWith == 'https'
-                                  ? "text-blue-500 underline cursor-pointer"
-                                  : ""
+                                ? "text-blue-500 underline cursor-pointer"
+                                : ""
                                 }`}
                               onClick={() => {
                                 if (msg?.data?.location?.file) {
@@ -162,21 +184,21 @@ const AiRes = ({
                     </p>
                   )}
 
-                 {mounted && msg.createdAt && (
-                <div className="text-xs text-zinc-400 mt-1">
-                  {formatTime(msg.createdAt instanceof Timestamp ? msg.createdAt.toDate() : new Date(msg.createdAt))}
-                </div>
-              )}
+                  {mounted && msg.createdAt && (
+                    <div className="text-xs text-zinc-400 mt-1">
+                      {formatTime(msg.createdAt instanceof Timestamp ? msg.createdAt.toDate() : new Date(msg.createdAt))}
+                    </div>
+                  )}
                 </div>
 
               )}
 
-             
+
 
               {msg.role === "bot" && mounted && (msg.text || msg.data) && (
                 <button
                   onClick={() => handleCopy(msg.text || JSON.stringify(msg.data, null, 2), index)}
-                  className="absolute -bottom-10 right-0 cursor-pointer opacity-100  transition-opacity p-2 rounded-md hover:bg-hoverbg" 
+                  className="absolute -bottom-10 right-0 cursor-pointer opacity-100  transition-opacity p-2 rounded-md hover:bg-hoverbg"
                 >
                   {copiedIndex === index ? <div className="flex items-center gap-1  text-foreground"> <Check size={14} className="text-green-600" /> Copied</div> : (<div className="flex items-center gap-1 text-foreground"> <Copy size={14} className="text-foreground" /> Copy</div>)}
                 </button>

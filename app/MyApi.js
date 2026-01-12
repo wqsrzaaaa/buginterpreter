@@ -7,17 +7,31 @@ const model = genAI.getGenerativeModel({
   model: "gemini-2.5-flash",
 });
 
-
-
-
 const generationConfig = {
   temperature: 0.2,
   topP: 0.9,
   topK: 40,
-  maxOutputTokens: 1200,
+  maxOutputTokens: 2200,
   responseMimeType: "application/json",
 };
 
+// Robust JSON parser
+function parseJSONSafely(raw) {
+  if (!raw) return null;
+  try {
+    // Try parsing the whole string first
+    return JSON.parse(raw);
+  } catch {
+    // fallback: match first {...} block
+    const match = raw.match(/\{[\s\S]*\}/);
+    if (!match) return null;
+    try {
+      return JSON.parse(match[0]);
+    } catch {
+      return null;
+    }
+  }
+}
 
 export async function run(userError, languageLabel = "English", imageBase64 = null) {
   const SYSTEM_PROMPT = `
@@ -60,45 +74,42 @@ Return JSON in the following EXACT schema:
 Use simple ${languageLabel} language.
 `;
 
-
   try {
-    // Escape quotes to prevent JSON breaking
     const safeError = userError.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
-
-    // Just send the user error as plain text
     const result = await model.generateContent({
       contents: [
         {
           role: "user",
-          parts: [{ text: safeError }],
+          parts: [
+            {
+              text: SYSTEM_PROMPT + "\n\nUSER ERROR:\n" + safeError + (imageBase64 ? `\n\nIMAGE_BASE64:\n${imageBase64}` : "")
+            }
+          ],
         },
       ],
       generationConfig,
     });
 
-    const rawText = result.response.text();
+    const rawText = result.response.text().trim();
 
-    let parsed = null;
-    try {
-      parsed = JSON.parse(rawText);
-    } catch {
-      parsed = {
-        errorType: "UNSTRUCTURED_RESPONSE",
-        rootCause: "AI did not return valid JSON.",
-        location: { file: null, line: null },
-        fixes: [],
-        diagnosticSteps: [],
-        followUpQuestions: ["Please provide the full error text."]
-      };
-    }
+    const parsed = parseJSONSafely(rawText) || {
+      errorType: "UNSTRUCTURED_RESPONSE",
+      rootCause: "AI did not return valid JSON or response was truncated.",
+      location: { file: null, line: null },
+      fixes: [],
+      diagnosticSteps: [],
+      followUpQuestions: ["Please provide the full error text."],
+    };
+
+    // Debug logs
+    console.log("raw start ----", rawText);
+    console.log("parsed start ----", JSON.stringify(parsed, null, 2));
 
     return { ok: true, data: parsed, raw: rawText };
-
   } catch (err) {
     console.error("AI PARSE ERROR:", err);
     return { ok: false, error: "MODEL_RESPONSE_ERROR", message: err.message };
   }
 }
-
 
 export default run;

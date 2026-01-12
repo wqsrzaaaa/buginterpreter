@@ -51,6 +51,10 @@ const Chats = ({ setChatId, chatId }) => {
     }
   }, []);
 
+  
+
+
+
   useEffect(() => {
     if (messagesContainerRef.current) {
       messagesContainerRef.current.scrollTop = messagesContainerRef.current.scrollHeight + 200;
@@ -75,150 +79,168 @@ const Chats = ({ setChatId, chatId }) => {
   };
 
 
-  const typeText = (fullText, messageIndex, speed = 40) => {
-    const words = fullText.split(" ");
+  const typeText = (text, index) => {
+    const words = text.split(" ");
     let current = "";
-
     let i = 0;
-    const interval = setInterval(() => {
-      current += (i === 0 ? "" : " ") + words[i];
 
+    const interval = setInterval(() => {
       setMessages(prev => {
+        if (!prev[index]) return prev;
+
+        current += (i === 0 ? "" : " ") + words[i];
         const updated = [...prev];
-        updated[messageIndex] = {
-          ...updated[messageIndex],
-          text: current,
-        };
+        updated[index] = { ...updated[index], text: current };
         return updated;
       });
 
       i++;
-      if (i >= words.length) {
-        clearInterval(interval);
-      }
-    }, speed);
+      if (i >= words.length) clearInterval(interval);
+    }, 35);
   };
 
-  const extractTextFromAI = (data) => {
-    if (data?.rootCause) {
-      return `❌ What Went Wrong\n\n${data.rootCause}`;
-    }
+const persistMessages = async (updatedMessages) => {
+  // make sure chatId exists
+  if (!chatId) {
+    console.warn("persistMessages called but chatId empty — creating one now.");
+    await ensureChatId();
+  }
+  try {
+    const chatRef = doc(db, "chats", chatId);
+    await setDoc(
+      chatRef,
+      {
+        messages: updatedMessages,
+        updatedAt: serverTimestamp(),
+      },
+      { merge: true }
+    );
+  } catch (err) {
+    console.error("setDoc error while persisting messages:", err);
+  }
+};
 
-    if (data?.message) {
-      return data.message;
-    }
 
-    return "No response from AI.";
-  };
 
-  const onSent = async (userText) => {
-    if (!userText.trim()) return;
-    if (isLoading) return;
+const onSent = async (userText) => {
+  if (!userText.trim()) return;
+  if (isLoading) return;
 
-    setInput("");
-    setIsLoading(true);
-    setImagePreview(null);
+  setInput("");
+  setIsLoading(true);
+  setImagePreview(null);
 
-    let imageBase64 = null;
-    if (imageFile) {
-      try {
-        imageBase64 = await fileToBase64(imageFile);
-      } catch (err) {
-        console.error("Error converting file to base64", err);
-      }
-    }
-
-    const userMessage = {
-      role: "user",
-      text: userText.replace(/\n/g, "<br />"),
-      createdAt: new Date(),
-      image: imageBase64 || null,
-    };
-
-    setMessages((prev) => {
-      const newMsgs = [
-        ...prev,
-        userMessage,
-        { role: "bot", text: "", data: null, createdAt: new Date() }, // placeholder for AI
-      ];
-      return newMsgs;
-    });
-
+  // convert file
+  let imageBase64 = null;
+  if (imageFile) {
     try {
+      imageBase64 = await fileToBase64(imageFile);
+    } catch (err) {
+      console.error("Error converting file to base64", err);
+    }
+  }
 
-      const aiResult = await run(userText, "English", imageBase64);
+  // use imageBase64 (not base64)
+  const userMsg = {
+    role: "user",
+    text: userText,
+    image: imageBase64,
+    createdAt: Date.now(),
+  };
 
-      if (!aiResult?.ok) {
-        setMessages((prev) => {
-          const updated = [...prev];
-          updated[updated.length - 1] = {
-            ...updated[updated.length - 1],
-            text: "⚠️ Failed to analyze the error.",
-          };
-          return updated;
-        });
-        setIsLoading(false);
-        return;
-      }
+  const botMsg = {
+    role: "bot",
+    text: "",
+    data: null,
+    createdAt: Date.now(),
+  };
 
-      const messageIndex = messages.length + 1;
-      const plainText = extractTextFromAI(aiResult.data);
+  let botIndex;
+  setMessages(prev => {
+    const updated = [...prev, userMsg, botMsg];
+    botIndex = updated.length - 1;
+    // persist but do not block UI — persistMessages has its own try/catch
+    persistMessages(updated);
+    return updated;
+  });
 
-      typeText(plainText, messageIndex);
+  try {
+    // pass imageBase64 to run
+    const res = await run(userText, "English", imageBase64);
 
-      setTimeout(() => {
-        setMessages((prev) => {
-          const updated = [...prev];
-          updated[messageIndex] = {
-            ...updated[messageIndex],
-            text: plainText,
-            data: aiResult.data,
-          };
-          return updated;
-        });
-        setIsLoading(false);
-        setImageFile(null);
-        setImagePreview(null);
-      }, plainText.split(" ").length * 40 + 200);
+    const reply =
+      res?.data?.rootCause ||
+      res?.data?.message ||
+      "No response from AI.";
 
-    } catch (e) {
-      console.error("AI call error:", e);
-      setMessages((prev) => {
+    typeText(reply, botIndex);
+
+    setTimeout(() => {
+      setMessages(prev => {
         const updated = [...prev];
-        updated[updated.length - 1] = {
-          ...updated[updated.length - 1],
-          text: "⚠️ AI call failed.",
+        if (!updated[botIndex]) return prev;
+        updated[botIndex] = {
+          ...updated[botIndex],
+          text: reply,
+          data: res.data,
         };
+        // persist update
+        persistMessages(updated);
         return updated;
       });
       setIsLoading(false);
-    }
-  };
+      setImageFile(null);
+    }, reply.split(" ").length * 35 + 200);
+  } catch (e) {
+    console.error("AI call error:", e);
+    setMessages((prev) => {
+      const updated = [...prev];
+      updated[updated.length - 1] = {
+        ...updated[updated.length - 1],
+        text: "⚠️ AI call failed.",
+      };
+      return updated;
+    });
+    setIsLoading(false);
+  }
+};
 
+// improved onSnapshot useEffect with error handler
+useEffect(() => {
+  if (!chatId) {
+    setMessages(defaultWelcome);
+    return;
+  }
 
-  useEffect(() => {
-    if (!chatId) {
-      setMessages(defaultWelcome);
-      return;
-    }
+  const chatRef = doc(db, "chats", chatId);
 
-    const chatRef = doc(db, "chats", chatId);
-
-    const unsub = onSnapshot(chatRef, async (snap) => {
+  const unsub = onSnapshot(
+    chatRef,
+    async (snap) => {
       if (snap.exists()) {
         setMessages(snap.data().messages || defaultWelcome);
       } else {
-        await setDoc(chatRef, {
-          messages: defaultWelcome,
-          createdAt: serverTimestamp(),
-        });
+        try {
+          await setDoc(chatRef, {
+            messages: defaultWelcome,
+            createdAt: serverTimestamp(),
+          });
+        } catch (err) {
+          console.error("Error creating chat document in onSnapshot else branch:", err);
+        }
         setMessages(defaultWelcome);
       }
-    });
+    },
+    (error) => {
+      // This is critical: log the exact Firestore listen error
+      console.error("onSnapshot listen error:", error);
+    }
+  );
 
-    return () => unsub();
-  }, [chatId]);
+  return () => unsub();
+}, [chatId]);
 
+ 
   const handleSend = () => onSent(Input);
 
   const [showThinking, setShowThinking] = useState(false);
@@ -226,7 +248,7 @@ const Chats = ({ setChatId, chatId }) => {
   useEffect(() => setMounted(true), []);
 
   useEffect(() => {
-    if (!isLoading) return; // only run when loading starts
+    if (!isLoading) return; 
 
     const timer = setTimeout(() => {
       setShowThinking(true);
@@ -250,7 +272,7 @@ const Chats = ({ setChatId, chatId }) => {
         />
       </div>
 
-      <AiRes
+      <AiRes 
         messagesContainerRef={messagesContainerRef}
         messages={messages}
         isLoading={isLoading}

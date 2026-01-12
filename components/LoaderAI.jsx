@@ -16,9 +16,7 @@ const LoaderAI = ({ showThinking }) => {
         <Image width={35} height={35} unoptimized src={`${theme == 'dark' ? '/logo2.png' : '/logo1.png'}`} alt="logo" className="loader-logo" />
       </div>
 
-      <span className="text-sm">
-        {showThinking ? "Thinking for better response..." : "Typing..."}
-      </span>
+     
     </div>
   )
 }

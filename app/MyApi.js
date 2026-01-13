@@ -39,17 +39,23 @@ You are DebugSense, an expert AI debugging agent.
 
 STRICT RULES:
 - You MUST respond ONLY with valid JSON.
-- If the input is NOT a programming error, return this exact JSON:
+- Do NOT wrap JSON in markdown.
+- Do NOT add explanations outside JSON.
+- Keep responses SHORT.
+
+LIMITS:
+- Max 2 fixes
+- Max 3 diagnosticSteps
+- Max 2 followUpQuestions
+
+If the input is NOT a programming error, return EXACTLY:
 
 {
   "error": "INVALID_INPUT",
   "message": "Please paste a programming error, stack trace, or console log."
 }
 
-TASK:
-Analyze the provided programming error, code, and optional screenshot.
-
-Return JSON in the following EXACT schema:
+Return JSON in EXACT schema:
 {
   "errorType": "string",
   "rootCause": "string",
@@ -74,42 +80,102 @@ Return JSON in the following EXACT schema:
 Use simple ${languageLabel} language.
 `;
 
-  try {
-    const safeError = userError.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
-    const result = await model.generateContent({
-      contents: [
-        {
-          role: "user",
-          parts: [
+  // ---------- helpers ----------
+
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+  const looksLikeCompleteJSON = (text) =>
+    text && text.trim().startsWith("{") && text.trim().endsWith("}");
+
+  const safeFallback = (reason) => ({
+    errorType: "UNSTRUCTURED_RESPONSE",
+    rootCause: reason,
+    location: { file: null, line: null },
+    fixes: [],
+    diagnosticSteps: [],
+    followUpQuestions: ["Please retry or provide full error text."],
+  });
+
+  async function generateWithRetry(retries = 3) {
+    let delay = 600;
+
+    for (let i = 0; i < retries; i++) {
+      try {
+        return await model.generateContent({
+          contents: [
             {
-              text: SYSTEM_PROMPT + "\n\nUSER ERROR:\n" + safeError + (imageBase64 ? `\n\nIMAGE_BASE64:\n${imageBase64}` : "")
-            }
+              role: "user",
+              parts: [
+                {
+                  text:
+                    SYSTEM_PROMPT +
+                    "\n\nUSER ERROR:\n" +
+                    userError +
+                    (imageBase64 ? `\n\nIMAGE_BASE64:\n${imageBase64}` : ""),
+                },
+              ],
+            },
           ],
-        },
-      ],
-      generationConfig,
-    });
+          generationConfig,
+        });
+      } catch (err) {
+        const msg = err?.message || "";
 
-    const rawText = result.response.text().trim();
+        if (!msg.includes("503") && i === retries - 1) {
+          throw err;
+        }
 
-    const parsed = parseJSONSafely(rawText) || {
-      errorType: "UNSTRUCTURED_RESPONSE",
-      rootCause: "AI did not return valid JSON or response was truncated.",
-      location: { file: null, line: null },
-      fixes: [],
-      diagnosticSteps: [],
-      followUpQuestions: ["Please provide the full error text."],
-    };
+        console.warn(`Retry ${i + 1} due to model overload...`);
+        await sleep(delay);
+        delay *= 2;
+      }
+    }
+  }
 
-    // Debug logs
+  // ---------- main ----------
+
+  try {
+    const result = await generateWithRetry(3);
+    const rawText = result?.response?.text()?.trim() || "";
+
     console.log("raw start ----", rawText);
+
+    if (!looksLikeCompleteJSON(rawText)) {
+      console.warn("⚠️ Truncated or incomplete JSON detected");
+      return {
+        ok: true,
+        data: safeFallback("Model returned truncated or incomplete JSON."),
+        raw: rawText,
+      };
+    }
+
+    const parsed = parseJSONSafely(rawText);
+
+    if (!parsed) {
+      console.warn("⚠️ JSON parse failed");
+      return {
+        ok: true,
+        data: safeFallback("JSON parsing failed due to malformed response."),
+        raw: rawText,
+      };
+    }
+
     console.log("parsed start ----", JSON.stringify(parsed, null, 2));
 
-    return { ok: true, data: parsed, raw: rawText };
+    return {
+      ok: true,
+      data: parsed,
+      raw: rawText,
+    };
   } catch (err) {
-    console.error("AI PARSE ERROR:", err);
-    return { ok: false, error: "MODEL_RESPONSE_ERROR", message: err.message };
+    console.error("AI MODEL ERROR:", err);
+    return {
+      ok: false,
+      error: "MODEL_RESPONSE_ERROR",
+      message: err.message || "Unknown model error",
+    };
   }
 }
+
 
 export default run;

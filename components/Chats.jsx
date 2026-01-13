@@ -3,7 +3,7 @@
 import run from '../app/MyApi';
 import { useLanguage } from "./context/LangProvider";
 import React, { useEffect, useRef, useState } from "react";
-import { Send, Bot, Mic, Paperclip } from "lucide-react";
+import { Send,  Mic, Paperclip } from "lucide-react";
 import { doc, setDoc, getDoc, serverTimestamp, onSnapshot } from "firebase/firestore";
 import { db } from "../Firebase";
 import Image from 'next/image';
@@ -281,7 +281,6 @@ useEffect(() => {
         formatTime={formatTime}
         handleCopy={handleCopy}
         copiedIndex={copiedIndex}
-        Bot={Bot}
         setzoom={setzoom}
         setglobleimg={setglobleimg}
       />

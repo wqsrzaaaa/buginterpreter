@@ -3,7 +3,7 @@ import { useTheme } from 'next-themes';
 import Image from 'next/image';
 import React from 'react'
 
-const LoaderAI = ({ showThinking }) => {
+const LoaderAI = () => {
   const { theme } = useTheme();
 
   return (

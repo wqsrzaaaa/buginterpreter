@@ -209,7 +209,7 @@ const AiRes = ({
                                   🧪 Diagnostic Steps
                                 </h2>
 
-                                <ul className="list-disc list-inside text-sm flex flex-col gap-2">
+                                <ul className="list-disc list-outside! ml-4 text-sm flex flex-col gap-2">
                                   {msg.data.diagnosticSteps.map((step, i) => (
                                     <li key={i} className="py-2">
                                       {isLastBot ? (

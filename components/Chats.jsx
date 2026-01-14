@@ -312,7 +312,7 @@ useEffect(() => {
               if (textareaRef.current) textareaRef.current.style.height = "auto";
             }
           }}
-          placeholder="Paste your error..."
+          placeholder="Paste with confident..."
           className="flex-1 px-3 py-2 min-h-12 relative z-6 mr-2 pr-25 custom-scrollbar resize-none border border-hardborder rounded-xl bg-transparent placeholder:text-muted-foreground focus:border-primary focus:ring-1 focus:ring-ring"
         />
 

@@ -132,13 +132,9 @@ Use simple ${languageLabel} language.
     }
   }
 
-  // ---------- main ----------
-
   try {
     const result = await generateWithRetry(3);
     const rawText = result?.response?.text()?.trim() || "";
-
-    console.log("raw start ----", rawText);
 
     if (!looksLikeCompleteJSON(rawText)) {
       console.warn("⚠️ Truncated or incomplete JSON detected");
@@ -160,7 +156,6 @@ Use simple ${languageLabel} language.
       };
     }
 
-    console.log("parsed start ----", JSON.stringify(parsed, null, 2));
 
     return {
       ok: true,
